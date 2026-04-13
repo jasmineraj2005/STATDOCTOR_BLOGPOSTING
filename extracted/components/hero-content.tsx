@@ -2,7 +2,7 @@
 
 export default function HeroContent() {
   return (
-    <main className="absolute bottom-6 left-4 sm:bottom-8 sm:left-8 z-20 max-w-xs sm:max-w-md lg:max-w-lg xl:max-w-xl">
+    <main className="absolute bottom-6 left-4 sm:bottom-8 sm:left-8 z-20 max-w-none">
       <div className="text-left">
         <div
           className="inline-flex items-center px-3 py-1 rounded-full bg-white/5 backdrop-blur-sm mb-4 relative"
@@ -15,7 +15,7 @@ export default function HeroContent() {
         </div>
 
         {/* Main Heading */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl leading-tight tracking-tight font-light text-white mb-3 sm:mb-4">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl leading-tight tracking-tight font-light text-white mb-3 sm:mb-4 whitespace-nowrap">
           <span className="font-medium italic instrument">Anu</span> Ganugapati
         </h1>
 
