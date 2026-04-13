@@ -3,8 +3,10 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
-const VALID_EMAIL = "anu@statdoctor.au"
-const VALID_PASSWORD = "statdoctor@1"
+const VALID_USERS: Array<{ email: string; password: string }> = [
+  { email: "anu@statdoctor.au", password: "statdoctor@1" },
+  { email: "test@statdoctor.au", password: "test@1" },
+]
 
 export default function LoginCard() {
   const router = useRouter()
@@ -16,7 +18,10 @@ export default function LoginCard() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    if (email === VALID_EMAIL && password === VALID_PASSWORD) {
+    const match = VALID_USERS.some(
+      (u) => u.email === email && u.password === password
+    )
+    if (match) {
       router.push("/dashboard")
     } else {
       setError("Invalid email or password. Please try again.")
@@ -24,10 +29,10 @@ export default function LoginCard() {
   }
 
   return (
-    <div className="w-full max-w-md">
+    <div className="w-full max-w-sm sm:max-w-md xl:max-w-lg">
       {/* Frosted glass card */}
       <div
-        className="rounded-2xl p-8 shadow-2xl"
+        className="rounded-2xl p-6 sm:p-8 xl:p-10 shadow-2xl"
         style={{
           background: "rgba(255, 255, 255, 0.92)",
           backdropFilter: "blur(24px)",
@@ -38,7 +43,7 @@ export default function LoginCard() {
         {/* Heading */}
         <div className="text-center mb-8">
           <h1
-            className="text-2xl font-semibold text-gray-600 mb-1 instrument"
+            className="text-xl sm:text-2xl xl:text-3xl font-semibold text-gray-600 mb-1 instrument"
             style={{ letterSpacing: "-0.02em" }}
           >
             Welcome back

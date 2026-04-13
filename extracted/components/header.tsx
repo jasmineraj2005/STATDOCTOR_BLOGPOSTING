@@ -11,7 +11,7 @@ export default function Header({ logoHref }: { logoHref?: string }) {
   const inDashboard = pathname?.startsWith("/dashboard") ?? false
 
   return (
-    <header className="relative z-20 flex items-center justify-between p-6">
+    <header className="relative z-20 flex items-center justify-between px-4 py-4 sm:px-6 sm:py-6">
       {/* Logo */}
       <a
         href={logoUrl}
@@ -23,7 +23,7 @@ export default function Header({ logoHref }: { logoHref?: string }) {
           alt="StatDoctor"
           width={180}
           height={45}
-          className="brightness-0 invert"
+          className="brightness-0 invert w-28 sm:w-36 md:w-44 xl:w-48"
         />
       </a>
 
@@ -48,12 +48,12 @@ export default function Header({ logoHref }: { logoHref?: string }) {
         className="relative flex items-center group"
         style={{ filter: "url(#gooey-filter)" }}
       >
-        <button className="absolute right-0 px-3 py-2.5 rounded-full bg-white text-black font-normal text-sm transition-all duration-300 hover:bg-white/90 cursor-pointer h-11 flex items-center justify-center -translate-x-12 group-hover:-translate-x-22 z-0">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button className="absolute right-0 px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-full bg-white text-black font-normal text-xs sm:text-sm transition-all duration-300 hover:bg-white/90 cursor-pointer h-8 sm:h-11 flex items-center justify-center -translate-x-10 sm:-translate-x-12 group-hover:-translate-x-19 sm:group-hover:-translate-x-22 z-0">
+          <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17L17 7M17 7H7M17 7V17" />
           </svg>
         </button>
-        <button className="px-8 py-2.5 rounded-full bg-white text-black font-normal text-sm transition-all duration-300 hover:bg-white/90 cursor-pointer h-11 flex items-center z-10">
+        <button className="px-5 py-2 sm:px-8 sm:py-2.5 rounded-full bg-white text-black font-normal text-xs sm:text-sm transition-all duration-300 hover:bg-white/90 cursor-pointer h-8 sm:h-11 flex items-center z-10">
           Login
         </button>
       </Link>
