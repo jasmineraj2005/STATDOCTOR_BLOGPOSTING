@@ -9,8 +9,10 @@ Given a TopicBrief, gathers:
 
 import json
 import random
+import re
 import sys
 import os
+import urllib.parse
 
 import httpx
 from openai import OpenAI
@@ -27,6 +29,65 @@ from config import (
 from models import ResearchBrief, Source, TopicBrief
 
 USED_IMAGES_LOG = OUTPUT_DIR / "used_images.json"
+
+
+def _build_chart_url(statistics: list[str], topic_title: str) -> str | None:
+    """Extract numeric data from statistics and return a Quickchart.io bar chart URL."""
+    labels: list[str] = []
+    values: list[float] = []
+
+    for stat in statistics[:6]:
+        # Extract the first number (with optional $ or %) from the stat string
+        num_match = re.search(r"\$?([\d,]+(?:\.\d+)?)\s*(%|k|K|m|M)?", stat)
+        if not num_match:
+            continue
+        raw = num_match.group(1).replace(",", "")
+        multiplier = {"k": 1000, "K": 1000, "m": 1_000_000, "M": 1_000_000}.get(
+            num_match.group(2) or "", 1
+        )
+        try:
+            value = float(raw) * multiplier
+        except ValueError:
+            continue
+
+        # Build a short label from the stat (first 4 meaningful words)
+        words = re.sub(r"[\$%,\d\.]+\w*", "", stat).split()
+        label = " ".join(w for w in words if len(w) > 2)[:25].strip()
+        if not label:
+            continue
+        labels.append(label)
+        values.append(value)
+
+    if len(labels) < 2:
+        return None
+
+    chart_config = {
+        "type": "bar",
+        "data": {
+            "labels": labels,
+            "datasets": [
+                {
+                    "label": "",
+                    "data": values,
+                    "backgroundColor": "#8b5cf6",
+                    "borderRadius": 6,
+                }
+            ],
+        },
+        "options": {
+            "plugins": {
+                "legend": {"display": False},
+                "title": {
+                    "display": True,
+                    "text": topic_title[:55],
+                    "font": {"size": 13},
+                },
+            },
+            "scales": {"y": {"beginAtZero": False}},
+        },
+    }
+    encoded = urllib.parse.quote(json.dumps(chart_config))
+    return f"https://quickchart.io/chart?c={encoded}&width=600&height=300&bkg=white"
 
 
 def _load_used_images() -> set[str]:
@@ -219,15 +280,23 @@ Rules:
     else:
         print("  [Researcher] No image (UNSPLASH_ACCESS_KEY missing or error)")
 
+    stats_list = data.get("statistics", [])
+    chart_url = _build_chart_url(stats_list, topic.title)
+    if chart_url:
+        print(f"  [Researcher] Chart generated for {len(stats_list)} statistics")
+    else:
+        print("  [Researcher] No chart generated (insufficient numeric stats)")
+
     brief = ResearchBrief(
         topic=topic,
         key_facts=data.get("key_facts", []),
-        statistics=data.get("statistics", []),
+        statistics=stats_list,
         sources=all_sources,
         ahpra_context=data.get("ahpra_context", ""),
         image_url=image_url,
         image_credit=image_credit,
         image_description=image_description,
+        chart_url=chart_url,
     )
 
     print(f"  [Researcher] {len(all_sources)} sources | {len(brief.key_facts)} facts | {len(brief.statistics)} stats")

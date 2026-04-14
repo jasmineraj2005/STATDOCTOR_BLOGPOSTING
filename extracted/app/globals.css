@@ -537,11 +537,158 @@ nextjs-portal,
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   Sidebar scroll — hide scrollbar but keep functional
+   Big stat block — dark navy (like reference blog-stat-block)
+   Used for [STAT: value] callouts
    ──────────────────────────────────────────────────────────────────── */
-aside::-webkit-scrollbar {
-  width: 0;
+.blog-stat-block {
+  background: #1e1b4b;
+  border-radius: 16px;
+  padding: 2rem 2.25rem;
+  text-align: center;
+  margin: 2rem 0;
 }
-aside {
-  scrollbar-width: none;
+
+.blog-stat-block .stat-value {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+  letter-spacing: -0.03em;
+}
+
+.blog-stat-block .stat-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.blog-stat-block .stat-source {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 0.4rem;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   Insight card — lime/green left border (like reference InsightCard)
+   Used for [INSIGHT: icon | title | desc] callouts
+   ──────────────────────────────────────────────────────────────────── */
+.blog-insight-card {
+  background: #f7fee7;
+  border-left: 4px solid #84cc16;
+  border-radius: 0 12px 12px 0;
+  padding: 1.1rem 1.25rem;
+  margin: 1.75rem 0;
+  display: flex;
+  gap: 0.875rem;
+  align-items: flex-start;
+}
+
+.blog-insight-card .insight-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+.blog-insight-card .insight-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #365314;
+  margin: 0 0 0.25rem;
+}
+
+.blog-insight-card .insight-desc {
+  font-size: 0.82rem;
+  color: #4d7c0f;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   Full CTA gradient section — StatDoctor join prompt
+   ──────────────────────────────────────────────────────────────────── */
+.post-cta-section {
+  background: linear-gradient(135deg, #3730a3 0%, #6d28d9 100%);
+  border-radius: 20px;
+  padding: 2.75rem 2.25rem;
+  margin: 2.5rem 0;
+  text-align: center;
+}
+
+.post-cta-section h3 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.75rem;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.post-cta-section > p {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  margin: 0 0 1.5rem;
+  max-width: 480px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.post-cta-tagline {
+  font-size: 0.72rem !important;
+  color: rgba(255, 255, 255, 0.42) !important;
+  margin: 1rem 0 0 !important;
+}
+
+.post-cta-btn {
+  display: inline-block;
+  background: #a3e635;
+  color: #1a2e05;
+  font-weight: 700;
+  font-size: 0.88rem;
+  padding: 0.7rem 1.6rem;
+  border-radius: 50px;
+  text-decoration: none !important;
+  border: none !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin: 0.3rem;
+}
+
+.post-cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(163, 230, 53, 0.4);
+}
+
+.post-cta-btn-outline {
+  background: transparent !important;
+  color: #ffffff !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+}
+
+.post-cta-btn-outline:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   Inline article image with caption
+   ──────────────────────────────────────────────────────────────────── */
+.post-inline-img {
+  margin: 2rem 0;
+}
+
+.post-inline-img img {
+  width: 100%;
+  border-radius: 14px;
+  display: block;
+  border: 1px solid #e5e7eb;
+}
+
+.post-inline-img figcaption {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: center;
+  margin-top: 0.5rem;
+  font-style: italic;
 }

@@ -56,6 +56,15 @@ def write_post(research: ResearchBrief) -> BlogPost:
     h2s_text = "\n".join(f"- {h}" for h in topic.suggested_h2s)
     faqs_text = "\n".join(f"- {q}" for q in topic.suggested_faqs)
 
+    chart_instruction = ""
+    if research.chart_url:
+        chart_instruction = f"""
+INLINE CHART — embed exactly once, after the second H2 section. Use this ready-made URL:
+![Key statistics for {topic.title}]({research.chart_url})
+"""
+    else:
+        chart_instruction = "INLINE CHART — no chart URL available for this article. Skip the chart."
+
     prompt = f"""You are an expert medical content writer for StatDoctor ({SITE_URL}), Australia's locum doctor marketplace.
 
 Write a complete, publication-ready blog post. You MUST write at least {MIN_WORDS} words — this is a hard requirement, not a suggestion. Target {MAX_WORDS} words. Each H2 section must have at least 3 paragraphs. The FAQ section must have at least 6 Q&A pairs. Do not stop early — a short post is a failed post.
@@ -111,16 +120,27 @@ BODY RULES:
 6. CTA paragraph after FAQ: one paragraph, plain text, mentioning StatDoctor with a link [{SITE_URL}]({SITE_URL})
 7. Final section: ## Sources — numbered list matching the sources provided
 
-CALLOUT BOXES — use these in the body for visual richness (1–2 per article):
+CALLOUT BOXES — use these in the body for visual richness. Mix types for variety:
 
-To highlight a key takeaway at the end of a section:
+BIG STAT BLOCK — bold navy card, use once for the single most striking figure in the article:
+> [STAT: $1,850/day] Average daily rate for metropolitan locum emergency physicians — AMA Locum Survey 2023
+
+INSIGHT CARD — lime-tinted tip card, use 1–2 times:
+> [INSIGHT: 💡 | Smart Tip | One specific, actionable sentence that helps a locum doctor]
+
+KEY TAKEAWAY — green summary box at end of an important section:
 > [KEY TAKEAWAY] One sentence that encapsulates the core insight of this section.
 
-To add an informational note or tip:
-> [INFO] A supporting fact, regulatory note, or practical tip for the reader.
+INFO / TIP — blue informational note:
+> [INFO] A supporting regulatory fact, compliance note, or practical tip for the reader.
 
-To illustrate with a real-world case study (when a genuine example exists):
+CASE STUDY — gray bordered panel (use only when a genuine example exists):
 > [CASE STUDY: Organisation or Hospital Name] Two to three sentences describing what happened and the outcome.
+
+{chart_instruction}
+
+CHECKLIST ITEMS — when listing benefits, features, or steps where each item has a title and explanation, use this format:
+- **Title of benefit**: One sentence explaining the practical benefit for locum doctors.
 
 WRITING RULES:
 - Australian English spelling (organisation, licence, practise, recognise)

@@ -155,6 +155,38 @@ export default function PostDetail({ post }: { post: Post }) {
           </div>
         )
       }
+      // [STAT: value] — dark navy bold stat block
+      if (text.match(/\[STAT:/i)) {
+        const match = text.match(/\[STAT:\s*([^\]]+)\]\s*([\s\S]*)/)
+        const value = match?.[1]?.trim() ?? ""
+        const rest = match?.[2]?.trim() ?? ""
+        const [mainLabel, source] = rest.split(/—|–|\|/).map((s) => s.trim())
+        return (
+          <div className="blog-stat-block">
+            <p className="stat-value">{value}</p>
+            {mainLabel && <p className="stat-label">{mainLabel}</p>}
+            {source && <p className="stat-source">{source}</p>}
+          </div>
+        )
+      }
+
+      // [INSIGHT: icon | title | desc] — lime insight card
+      if (text.match(/\[INSIGHT:/i)) {
+        const match = text.match(/\[INSIGHT:\s*([^\|]+)\|([^\|]+)\|([^\]]+)\]/)
+        const icon = match?.[1]?.trim() ?? "💡"
+        const title = match?.[2]?.trim() ?? ""
+        const desc = match?.[3]?.trim() ?? ""
+        return (
+          <div className="blog-insight-card">
+            <span className="insight-icon">{icon}</span>
+            <div>
+              <p className="insight-title">{title}</p>
+              <p className="insight-desc">{desc}</p>
+            </div>
+          </div>
+        )
+      }
+
       // Default — disclaimer / note blockquote
       return <blockquote className="post-blockquote">{children}</blockquote>
     },
@@ -224,7 +256,7 @@ export default function PostDetail({ post }: { post: Post }) {
       return <li>{children}</li>
     },
 
-    // Paragraph — detect StatDoctor CTA paragraph
+    // Paragraph — detect StatDoctor CTA paragraph → full gradient CTA section
     p: ({ children }) => {
       const text = extractNodeText(children)
       if (
@@ -235,16 +267,31 @@ export default function PostDetail({ post }: { post: Post }) {
           text.toLowerCase().includes("register"))
       ) {
         return (
-          <div className="post-cta-box">
-            <p className="text-base font-semibold mb-2" style={{ color: "#4c1d95" }}>
-              Join Australia&apos;s Fastest-Growing Locum Network
+          <div className="post-cta-section">
+            <h3>Join Australia&apos;s Fastest-Growing Locum Network</h3>
+            <p>
+              StatDoctor connects hospitals and clinics with verified locum doctors across Australia.
+              Streamlined onboarding, instant bookings, and transparent rates — no middlemen.
             </p>
-            <p className="text-sm leading-relaxed" style={{ color: "#5b21b6" }}>{children}</p>
+            <div>
+              <a href="https://statdoctor.app" className="post-cta-btn">I&apos;m a Doctor — Find Shifts</a>
+              <a href="https://statdoctor.app" className="post-cta-btn post-cta-btn-outline">Post a Locum Role</a>
+            </div>
+            <p className="post-cta-tagline">Free to sign up · No agency fees · Instant matching</p>
           </div>
         )
       }
       return <p>{children}</p>
     },
+
+    // Inline images — styled with caption
+    img: ({ src, alt }) => (
+      <figure className="post-inline-img">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src ?? ""} alt={alt ?? ""} loading="lazy" />
+        {alt && <figcaption>{alt}</figcaption>}
+      </figure>
+    ),
   }
 
   const statStrip = [
@@ -322,8 +369,7 @@ export default function PostDetail({ post }: { post: Post }) {
               <img
                 src={post.image_url}
                 alt={post.og_image_alt}
-                className="w-full rounded-2xl"
-                style={{ maxHeight: "380px", objectFit: "cover" }}
+                className="w-full rounded-2xl block"
               />
               {post.image_credit && (
                 <p className="text-[11px] text-white/28 font-light mt-2 px-1">
@@ -335,19 +381,28 @@ export default function PostDetail({ post }: { post: Post }) {
 
           {/* ── Stat Strip ──────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            {statStrip.map(({ value, label }) => (
-              <div
-                key={label}
-                className="rounded-xl p-4 transition-all duration-200 hover:scale-[1.02]"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.09)",
-                }}
-              >
-                <p className="text-2xl font-bold text-white">{value}</p>
-                <p className="text-xs text-white/38 font-light mt-0.5 uppercase tracking-wide">{label}</p>
-              </div>
-            ))}
+            {statStrip.map(({ value, label }) => {
+              const isViolet = label === "read time" || label === "sources cited"
+              return (
+                <div
+                  key={label}
+                  className="rounded-xl p-4 transition-all duration-200 hover:scale-[1.02]"
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid #e5e7eb",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <p className="text-2xl font-bold" style={{ color: "#111827" }}>{value}</p>
+                  <p
+                    className="text-xs font-medium mt-0.5 uppercase tracking-wide"
+                    style={{ color: isViolet ? "#7c3aed" : "#9ca3af" }}
+                  >
+                    {label}
+                  </p>
+                </div>
+              )
+            })}
           </div>
 
           {/* ── Main Grid ───────────────────────────────────────────────── */}
@@ -400,7 +455,7 @@ export default function PostDetail({ post }: { post: Post }) {
             </div>
 
             {/* ── Sticky Sidebar ─────────────────────────────────────────── */}
-            <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+            <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
 
               {/* In This Guide */}
               <TocSidebar items={tocItems} />

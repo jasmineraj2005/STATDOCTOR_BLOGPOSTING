@@ -81,6 +81,7 @@ class ResearchBrief(BaseModel):
     image_url: Optional[str] = None
     image_credit: Optional[str] = None
     image_description: Optional[str] = None
+    chart_url: Optional[str] = None  # Quickchart.io URL built from statistics
 
 
 class BlogPost(BaseModel):
