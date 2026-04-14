@@ -2,6 +2,7 @@ import Link from "next/link"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import React from "react"
+import type { Components } from "react-markdown"
 import { PILLAR_LABELS, type Post } from "@/lib/posts"
 import TocSidebar, { type TocItem } from "@/components/toc-sidebar"
 import FaqAccordion, { type FaqItem } from "@/components/faq-accordion"
@@ -93,16 +94,41 @@ export default function PostDetail({ post }: { post: Post }) {
   const { before, sources } = splitAtFaq(post.content_markdown)
 
   // Custom markdown component renderers
-  const mdComponents = {
+  const mdComponents: Components = {
     // Add anchor IDs to every H2 for TOC scroll-tracking
-    h2: ({ children }: { children?: React.ReactNode }) => {
+    h2: ({ children }) => {
       const text = extractNodeText(children)
       const id = slugify(text)
       return <h2 id={id}>{children}</h2>
     },
+
     // Detect callout box types from blockquote content
-    blockquote: ({ children }: { children?: React.ReactNode }) => {
+    blockquote: ({ children }) => {
       const text = extractNodeText(children)
+
+      // [GRID] — feature card grid
+      if (text.includes("[GRID]")) {
+        const items = extractNodeText(children)
+          .replace("[GRID]", "")
+          .split(/\n[-*]\s+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+        return (
+          <div className="feature-card-grid">
+            {items.map((item, i) => {
+              const [title, ...rest] = item.split(/[:—–]/)
+              return (
+                <div key={i} className="feature-card">
+                  <p className="feature-card-title">{title?.trim()}</p>
+                  {rest.length > 0 && (
+                    <p className="feature-card-desc">{rest.join(":").trim()}</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      }
 
       if (text.includes("[KEY TAKEAWAY]")) {
         return (
@@ -131,6 +157,93 @@ export default function PostDetail({ post }: { post: Post }) {
       }
       // Default — disclaimer / note blockquote
       return <blockquote className="post-blockquote">{children}</blockquote>
+    },
+
+    // Ordered list — violet numbered circles
+    ol: ({ children }) => (
+      <ol className="post-numbered-list">{children}</ol>
+    ),
+
+    // Unordered list — detect checklist (items starting with bold) vs regular bullets
+    ul: ({ children }) => {
+      const items = React.Children.toArray(children)
+      // Count items where the first p-child's first element is a <strong>
+      const boldCount = items.filter((child) => {
+        if (!React.isValidElement(child)) return false
+        const liChildren = React.Children.toArray(
+          ((child as React.ReactElement).props as { children?: React.ReactNode }).children
+        )
+        const firstChild = liChildren[0]
+        if (!React.isValidElement(firstChild) || (firstChild as React.ReactElement).type !== "p") return false
+        const pChildren = React.Children.toArray(
+          ((firstChild as React.ReactElement).props as { children?: React.ReactNode }).children
+        )
+        return React.isValidElement(pChildren[0]) && (pChildren[0] as React.ReactElement).type === "strong"
+      }).length
+
+      if (boldCount >= 2) {
+        return <ul className="post-checklist not-prose">{children}</ul>
+      }
+      return <ul className="post-bullets">{children}</ul>
+    },
+
+    // List item — render checklist card if starts with bold, else normal
+    li: ({ children }) => {
+      const childArray = React.Children.toArray(children)
+      const firstChild = childArray[0]
+
+      // Detect: li > p > strong (react-markdown renders `- **Title**: desc` this way)
+      if (React.isValidElement(firstChild) && (firstChild as React.ReactElement).type === "p") {
+        const pChildren = React.Children.toArray(
+          ((firstChild as React.ReactElement).props as { children?: React.ReactNode }).children
+        )
+        const firstInP = pChildren[0]
+        if (React.isValidElement(firstInP) && (firstInP as React.ReactElement).type === "strong") {
+          const title = extractNodeText(firstInP)
+          const desc = pChildren
+            .slice(1)
+            .map((c) => extractNodeText(c as React.ReactNode))
+            .join("")
+            .replace(/^[：:—–\s]+/, "")
+            .trim()
+          return (
+            <li className="post-checklist-item">
+              <div className="post-checklist-circle">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M2.5 7L5.5 10L11.5 4" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <div>
+                <p className="post-checklist-title">{title}</p>
+                {desc && <p className="post-checklist-desc">{desc}</p>}
+              </div>
+            </li>
+          )
+        }
+      }
+      return <li>{children}</li>
+    },
+
+    // Paragraph — detect StatDoctor CTA paragraph
+    p: ({ children }) => {
+      const text = extractNodeText(children)
+      if (
+        text.toLowerCase().includes("statdoctor") &&
+        (text.toLowerCase().includes("fastest-growing") ||
+          text.toLowerCase().includes("join") ||
+          text.toLowerCase().includes("network") ||
+          text.toLowerCase().includes("register"))
+      ) {
+        return (
+          <div className="post-cta-box">
+            <p className="text-base font-semibold mb-2" style={{ color: "#4c1d95" }}>
+              Join Australia&apos;s Fastest-Growing Locum Network
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: "#5b21b6" }}>{children}</p>
+          </div>
+        )
+      }
+      return <p>{children}</p>
     },
   }
 
@@ -244,8 +357,9 @@ export default function PostDetail({ post }: { post: Post }) {
             <div
               className="rounded-2xl p-8 md:p-10 min-w-0"
               style={{
-                background: "#0c0c0f",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "#ffffff",
+                border: "1px solid #e5e7eb",
+                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
               }}
             >
               {/* Main article content (before FAQ) */}
@@ -263,8 +377,8 @@ export default function PostDetail({ post }: { post: Post }) {
                 <div className="mt-10">
                   <h2
                     id="frequently-asked-questions"
-                    className="text-xl font-semibold text-white mb-5"
-                    style={{ letterSpacing: "-0.02em" }}
+                    className="text-xl font-semibold mb-5"
+                    style={{ letterSpacing: "-0.02em", color: "#111827" }}
                   >
                     Frequently Asked Questions
                   </h2>
@@ -274,7 +388,7 @@ export default function PostDetail({ post }: { post: Post }) {
 
               {/* Sources section */}
               {sources && (
-                <article className="post-prose mt-10 pt-8" style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                <article className="post-prose mt-10 pt-8" style={{ borderTop: "1px solid #e5e7eb" }}>
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={mdComponents as any}

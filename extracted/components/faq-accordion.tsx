@@ -15,21 +15,22 @@ export default function FaqAccordion({ items }: { items: FaqItem[] }) {
       {items.map((item, i) => (
         <div
           key={i}
-          className="rounded-xl overflow-hidden"
+          className="rounded-xl overflow-hidden transition-shadow duration-200"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.10)",
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            boxShadow: open === i ? "0 4px 16px rgba(0,0,0,0.07)" : "none",
           }}
         >
           <button
             onClick={() => setOpen(open === i ? null : i)}
             className="w-full flex items-center justify-between px-5 py-4 text-left cursor-pointer group"
           >
-            <span className="text-sm font-medium text-white/85 pr-4 group-hover:text-white transition-colors duration-200">
+            <span className="text-sm font-semibold text-gray-800 pr-4 group-hover:text-violet-700 transition-colors duration-200">
               {item.q}
             </span>
             <ChevronDown
-              className={`w-4 h-4 text-violet-400 flex-shrink-0 transition-transform duration-300 ${
+              className={`w-4 h-4 text-violet-500 flex-shrink-0 transition-transform duration-300 ${
                 open === i ? "rotate-180" : ""
               }`}
             />
@@ -42,8 +43,8 @@ export default function FaqAccordion({ items }: { items: FaqItem[] }) {
             }}
           >
             <div
-              className="px-5 pb-5 pt-3 text-sm text-white/65 font-light leading-relaxed"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+              className="px-5 pb-5 pt-3 text-sm text-gray-600 font-light leading-relaxed"
+              style={{ borderTop: "1px solid #f3f4f6" }}
             >
               {item.a}
             </div>
