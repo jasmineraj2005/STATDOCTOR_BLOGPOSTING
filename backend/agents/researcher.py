@@ -8,6 +8,7 @@ Given a TopicBrief, gathers:
 """
 
 import json
+import random
 import sys
 import os
 
@@ -21,8 +22,25 @@ from config import (
     GUARDIAN_API_KEY,
     UNSPLASH_ACCESS_KEY,
     WRITER_MODEL,
+    OUTPUT_DIR,
 )
 from models import ResearchBrief, Source, TopicBrief
+
+USED_IMAGES_LOG = OUTPUT_DIR / "used_images.json"
+
+
+def _load_used_images() -> set[str]:
+    if USED_IMAGES_LOG.exists():
+        with open(USED_IMAGES_LOG) as f:
+            return set(json.load(f))
+    return set()
+
+
+def _save_used_image(photo_id: str) -> None:
+    used = _load_used_images()
+    used.add(photo_id)
+    with open(USED_IMAGES_LOG, "w") as f:
+        json.dump(list(used), f)
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -53,12 +71,14 @@ def _search_guardian(query: str, n: int = 8) -> list[dict]:
 def _fetch_unsplash_image(
     query: str,
 ) -> tuple[str | None, str | None, str | None]:
-    """Returns (url, credit_string, description)."""
+    """Returns (url, credit_string, description). Avoids re-using the same photo."""
     if not UNSPLASH_ACCESS_KEY:
         return None, None, None
+
+    used_ids = _load_used_images()
     params = {
         "query": query,
-        "per_page": 3,
+        "per_page": 10,
         "orientation": "landscape",
         "client_id": UNSPLASH_ACCESS_KEY,
     }
@@ -66,14 +86,20 @@ def _fetch_unsplash_image(
         r = httpx.get(UNSPLASH_BASE, params=params, timeout=10)
         r.raise_for_status()
         results = r.json().get("results", [])
-        if results:
-            photo = results[0]
-            url = photo["urls"]["regular"]
-            photographer = photo["user"]["name"]
-            credit = f"Photo by {photographer} on Unsplash"
+        random.shuffle(results)
+
+        # Prefer an unused photo; fall back to any if all used
+        chosen = next((p for p in results if p["id"] not in used_ids), None)
+        if chosen is None and results:
+            chosen = results[0]
+
+        if chosen:
+            _save_used_image(chosen["id"])
+            url = chosen["urls"]["regular"]
+            credit = f"Photo by {chosen['user']['name']} on Unsplash"
             description = (
-                photo.get("description")
-                or photo.get("alt_description")
+                chosen.get("description")
+                or chosen.get("alt_description")
                 or query
             )
             return url, credit, description

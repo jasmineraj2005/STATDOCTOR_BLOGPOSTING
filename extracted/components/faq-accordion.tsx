@@ -1,0 +1,55 @@
+"use client"
+
+import { useState } from "react"
+import { ChevronDown } from "lucide-react"
+
+export type FaqItem = { q: string; a: string }
+
+export default function FaqAccordion({ items }: { items: FaqItem[] }) {
+  const [open, setOpen] = useState<number | null>(null)
+
+  if (items.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-2">
+      {items.map((item, i) => (
+        <div
+          key={i}
+          className="rounded-xl overflow-hidden"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.10)",
+          }}
+        >
+          <button
+            onClick={() => setOpen(open === i ? null : i)}
+            className="w-full flex items-center justify-between px-5 py-4 text-left cursor-pointer group"
+          >
+            <span className="text-sm font-medium text-white/85 pr-4 group-hover:text-white transition-colors duration-200">
+              {item.q}
+            </span>
+            <ChevronDown
+              className={`w-4 h-4 text-violet-400 flex-shrink-0 transition-transform duration-300 ${
+                open === i ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          <div
+            style={{
+              maxHeight: open === i ? "600px" : "0",
+              overflow: "hidden",
+              transition: "max-height 0.35s ease",
+            }}
+          >
+            <div
+              className="px-5 pb-5 pt-3 text-sm text-white/65 font-light leading-relaxed"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+            >
+              {item.a}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}

@@ -52,12 +52,20 @@ function PostCard({ post }: { post: Post }) {
   return (
     <Link
       href={`/dashboard/posts/${post.slug}`}
-      className="rounded-2xl p-7 cursor-pointer group transition-transform duration-300 hover:-translate-y-1 flex flex-col"
+      className="rounded-2xl p-7 cursor-pointer group transition-all duration-300 hover:-translate-y-1 hover:scale-[1.03] flex flex-col"
       style={{
         background: "rgba(255, 255, 255, 0.10)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
         border: "1px solid rgba(255, 255, 255, 0.18)",
+        boxShadow: "0 0 0 0 rgba(139,92,246,0)",
+        transition: "transform 0.3s ease, box-shadow 0.3s ease",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = "0 12px 40px rgba(139,92,246,0.22)"
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 0 rgba(139,92,246,0)"
       }}
     >
       {/* Pillar tag */}

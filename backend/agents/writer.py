@@ -111,6 +111,17 @@ BODY RULES:
 6. CTA paragraph after FAQ: one paragraph, plain text, mentioning StatDoctor with a link [{SITE_URL}]({SITE_URL})
 7. Final section: ## Sources — numbered list matching the sources provided
 
+CALLOUT BOXES — use these in the body for visual richness (1–2 per article):
+
+To highlight a key takeaway at the end of a section:
+> [KEY TAKEAWAY] One sentence that encapsulates the core insight of this section.
+
+To add an informational note or tip:
+> [INFO] A supporting fact, regulatory note, or practical tip for the reader.
+
+To illustrate with a real-world case study (when a genuine example exists):
+> [CASE STUDY: Organisation or Hospital Name] Two to three sentences describing what happened and the outcome.
+
 WRITING RULES:
 - Australian English spelling (organisation, licence, practise, recognise)
 - Write for time-poor doctors — no filler, no padding
