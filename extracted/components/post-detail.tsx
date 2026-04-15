@@ -314,17 +314,7 @@ export default function PostDetail({ post }: { post: Post }) {
           {/* Back link */}
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm font-medium mb-6 transition-colors duration-200"
-            style={{
-              color: "hsl(240, 20%, 46%)",
-              fontFamily: "var(--font-montserrat), sans-serif",
-            }}
-            onMouseEnter={(e) => {
-              ;(e.currentTarget as HTMLElement).style.color = "hsl(240, 50%, 20%)"
-            }}
-            onMouseLeave={(e) => {
-              ;(e.currentTarget as HTMLElement).style.color = "hsl(240, 20%, 46%)"
-            }}
+            className="post-back-link inline-flex items-center gap-1.5 text-sm font-medium mb-6 transition-colors duration-200"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -416,25 +406,7 @@ export default function PostDetail({ post }: { post: Post }) {
             {statStrip.map(({ value, label }) => {
               const isIndigo = label === "read time" || label === "sources cited"
               return (
-                <div
-                  key={label}
-                  className="rounded-2xl p-6 text-center transition-all duration-300"
-                  style={{
-                    background: "#ffffff",
-                    border: "1px solid hsl(245, 25%, 90%)",
-                    boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.08)",
-                  }}
-                  onMouseEnter={(e) => {
-                    ;(e.currentTarget as HTMLElement).style.boxShadow =
-                      "0 8px 40px -8px hsl(240 50% 20% / 0.15)"
-                    ;(e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"
-                  }}
-                  onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLElement).style.boxShadow =
-                      "0 4px 24px -4px hsl(240 50% 20% / 0.08)"
-                    ;(e.currentTarget as HTMLElement).style.transform = "translateY(0)"
-                  }}
-                >
+                <div key={label} className="post-stat-card rounded-2xl p-6 text-center">
                   <p
                     className="text-3xl md:text-4xl font-bold mb-1"
                     style={{

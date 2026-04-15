@@ -575,6 +575,28 @@ nextjs-portal,
 }
 
 /* ────────────────────────────────────────────────────────────────────
+   Back link + stat strip cards (server-component-safe hover via CSS)
+   ──────────────────────────────────────────────────────────────────── */
+.post-back-link {
+  color: hsl(240, 20%, 46%);
+  font-family: var(--font-montserrat), sans-serif;
+}
+.post-back-link:hover {
+  color: hsl(240, 50%, 20%);
+}
+
+.post-stat-card {
+  background: #ffffff;
+  border: 1px solid hsl(245, 25%, 90%);
+  box-shadow: 0 4px 24px -4px hsl(240 50% 20% / 0.08);
+  transition: box-shadow 300ms ease, transform 300ms ease;
+}
+.post-stat-card:hover {
+  box-shadow: 0 8px 40px -8px hsl(240 50% 20% / 0.15);
+  transform: translateY(-2px);
+}
+
+/* ────────────────────────────────────────────────────────────────────
    Big stat block — dark navy (reference: blog-stat-block)
    bg: hsl(240, 50%, 20%) | radius: rounded-2xl | centered | Varela Round value
    ──────────────────────────────────────────────────────────────────── */
