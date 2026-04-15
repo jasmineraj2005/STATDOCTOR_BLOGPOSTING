@@ -153,79 +153,106 @@ nextjs-portal,
 }
 
 /* ────────────────────────────────────────────────────────────────────
+   StatDoctor blog — reference design tokens (from Lovable spec)
+   ──────────────────────────────────────────────────────────────────── */
+:root {
+  --sd-foreground: hsl(240, 50%, 20%);
+  --sd-muted-foreground: hsl(240, 20%, 46%);
+  --sd-border: hsl(245, 25%, 90%);
+  --sd-primary: hsl(240, 55%, 55%);              /* indigo */
+  --sd-primary-purple: hsl(250, 50%, 50%);       /* purple */
+  --sd-brand-lime: hsl(68, 85%, 55%);
+  --sd-brand-lime-dark: hsl(68, 70%, 40%);
+  --sd-brand-lime-light: hsl(68, 80%, 90%);
+  --sd-brand-indigo-dark: hsl(240, 50%, 20%);
+  --sd-callout-bg: hsl(250, 50%, 96%);
+  --sd-card-shadow: 0 4px 24px -4px hsl(240 50% 20% / 0.08);
+  --sd-card-shadow-hover: 0 8px 40px -8px hsl(240 50% 20% / 0.15);
+
+  --font-varela: var(--font-varela-round, "Varela Round"), sans-serif;
+  --font-body: var(--font-montserrat, "Montserrat"), sans-serif;
+  --font-grotesk: var(--font-space-grotesk, "Space Grotesk"), sans-serif;
+}
+
+/* ────────────────────────────────────────────────────────────────────
    Post detail markdown typography — light editorial theme
-   White background, charcoal text, violet accents
+   Body: Montserrat | Headings: Varela Round | Labels: Space Grotesk
    ──────────────────────────────────────────────────────────────────── */
 .post-prose {
-  color: #4b5563;
+  color: var(--sd-muted-foreground);
+  font-family: var(--font-body);
   font-weight: 400;
-  line-height: 1.8;
-  font-size: 15.5px;
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+.post-prose h1,
+.post-prose h2,
+.post-prose h3 {
+  font-family: var(--font-varela);
+  color: var(--sd-foreground);
+  letter-spacing: -0.015em;
 }
 
 .post-prose h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #111827;
-  letter-spacing: -0.03em;
+  font-size: 1.875rem;
   margin: 0 0 0.75rem;
   line-height: 1.2;
 }
 
 .post-prose h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #111827;
-  letter-spacing: -0.025em;
-  margin: 2.75rem 0 0.85rem;
+  font-size: 1.75rem;
+  margin: 2.75rem 0 1rem;
   line-height: 1.25;
+  font-weight: 400;
 }
 
 .post-prose h3 {
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 1.25rem;
   margin: 2rem 0 0.75rem;
+  font-weight: 400;
 }
 
 .post-prose p {
   margin: 0 0 1.25rem;
-  color: #4b5563;
+  color: var(--sd-muted-foreground);
+  line-height: 1.7;
 }
 
 .post-prose a {
-  color: #7c3aed;
+  color: var(--sd-primary);
   text-decoration: none;
-  border-bottom: 1px solid rgba(124, 58, 237, 0.3);
+  border-bottom: 1px solid hsl(240 55% 55% / 0.3);
   transition: border-color 0.2s;
 }
 
 .post-prose a:hover {
-  border-bottom-color: rgba(124, 58, 237, 0.8);
+  border-bottom-color: hsl(240 55% 55% / 0.8);
 }
 
 .post-prose strong {
-  color: #111827;
+  color: var(--sd-foreground);
   font-weight: 600;
 }
 
 .post-prose em {
   font-style: italic;
-  color: #6b7280;
+  color: var(--sd-muted-foreground);
 }
 
 .post-prose hr {
   border: none;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--sd-border);
   margin: 2.5rem 0;
 }
 
 .post-prose code {
-  background: #f3f4f6;
+  background: hsl(245, 25%, 93%);
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   font-size: 0.85em;
-  color: #7c3aed;
+  color: var(--sd-primary);
+  font-family: var(--font-mono, ui-monospace, monospace);
 }
 
 .post-prose pre {
@@ -275,7 +302,7 @@ nextjs-portal,
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #8b5cf6;
+  background: var(--sd-primary);
 }
 
 /* ────────────────────────────────────────────────────────────────────
@@ -295,15 +322,16 @@ nextjs-portal,
   align-items: flex-start;
   gap: 1rem;
   background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  border: 1px solid var(--sd-border);
+  border-radius: 1rem;
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--sd-card-shadow);
+  transition: box-shadow 300ms ease, transform 300ms ease;
 }
 
 .post-checklist-item:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
-  transform: translateY(-1px);
+  box-shadow: var(--sd-card-shadow-hover);
+  transform: translateY(-2px);
 }
 
 .post-checklist-circle {
@@ -311,7 +339,7 @@ nextjs-portal,
   height: 1.75rem;
   min-width: 1.75rem;
   border-radius: 50%;
-  background: #7c3aed;
+  background: var(--sd-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -324,16 +352,18 @@ nextjs-portal,
 }
 
 .post-checklist-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 0.2rem;
+  font-family: var(--font-varela);
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--sd-foreground);
+  margin-bottom: 0.25rem;
 }
 
 .post-checklist-desc {
-  font-size: 0.82rem;
-  color: #6b7280;
-  line-height: 1.55;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--sd-muted-foreground);
+  line-height: 1.625;
 }
 
 /* ────────────────────────────────────────────────────────────────────
@@ -366,9 +396,10 @@ nextjs-portal,
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 50%;
-  background: #8b5cf6;
+  background: var(--sd-primary);
   color: #ffffff;
-  font-size: 0.68rem;
+  font-family: var(--font-grotesk);
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.75rem;
   text-align: center;
@@ -391,76 +422,56 @@ nextjs-portal,
 }
 
 .feature-card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.25rem;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  background: #ffffff;
+  border: 1px solid var(--sd-border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: var(--sd-card-shadow);
+  transition: box-shadow 300ms ease, transform 300ms ease;
 }
 
 .feature-card:hover {
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.09);
+  box-shadow: var(--sd-card-shadow-hover);
   transform: translateY(-2px);
 }
 
 .feature-card-icon {
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   display: block;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
 }
 
 .feature-card-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 0.35rem;
+  font-family: var(--font-varela);
+  font-size: 1.125rem;
+  font-weight: 400;
+  color: var(--sd-foreground);
+  margin-bottom: 0.5rem;
 }
 
 .feature-card-desc {
-  font-size: 0.8rem;
-  color: #6b7280;
-  line-height: 1.55;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--sd-muted-foreground);
+  line-height: 1.625;
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   CTA box — StatDoctor join prompt
-   ──────────────────────────────────────────────────────────────────── */
-.post-cta-box {
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-  border: 1px solid #ddd6fe;
-  border-radius: 16px;
-  padding: 1.75rem 2rem;
-  margin: 2.5rem 0 1rem;
-  text-align: center;
-}
-
-.post-cta-box p {
-  color: #4c1d95;
-  font-size: 0.97rem;
-  line-height: 1.8;
-  margin: 0;
-}
-
-.post-cta-box a {
-  color: #7c3aed;
-  font-weight: 600;
-  border-bottom: 2px solid rgba(124, 58, 237, 0.35);
-}
-
-/* ────────────────────────────────────────────────────────────────────
-   Default blockquote (disclaimers, pull quotes)
+   Default blockquote — pull quote with indigo left border
    ──────────────────────────────────────────────────────────────────── */
 .post-blockquote {
-  border-left: 3px solid #ddd6fe;
-  padding: 0.6rem 0 0.6rem 1.25rem;
+  border-left: 4px solid var(--sd-primary);
+  padding: 0.5rem 0 0.5rem 1.5rem;
   margin: 2rem 0;
   font-style: italic;
-  color: #6b7280;
+  color: var(--sd-muted-foreground);
 }
 
 .post-blockquote p {
-  margin: 0.2rem 0;
-  color: #6b7280;
+  margin: 0.25rem 0;
+  color: var(--sd-muted-foreground);
+  font-family: var(--font-varela);
+  font-size: 1.125rem;
 }
 
 /* ────────────────────────────────────────────────────────────────────
@@ -475,220 +486,323 @@ nextjs-portal,
   margin-bottom: 0.5rem;
 }
 
-/* Key Takeaway — lime/green tint (matches reference) */
+/* Key Takeaway — lime summary box (reference: blog-summary-box) */
 .callout-takeaway {
-  background: #f0fdf4;
-  border-left: 3px solid #16a34a;
-  border-radius: 0 10px 10px 0;
-  padding: 1rem 1.25rem;
+  background: var(--sd-brand-lime-light);
+  border: 1px solid hsl(68 85% 55% / 0.3);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
   margin: 1.75rem 0;
 }
 
 .callout-takeaway .callout-label {
-  color: #15803d;
+  color: var(--sd-brand-lime-dark);
+  font-family: var(--font-grotesk);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .callout-takeaway p {
-  color: #374151;
+  color: var(--sd-foreground);
+  font-size: 0.875rem;
+  line-height: 1.7;
   margin: 0;
   font-style: normal;
 }
 
-/* Info / Tip — blue tint */
+/* Info / Callout — pale indigo with indigo left border (reference: blog-callout) */
 .callout-info {
-  background: #eff6ff;
-  border-left: 3px solid #3b82f6;
-  border-radius: 0 10px 10px 0;
-  padding: 1rem 1.25rem;
+  background: var(--sd-callout-bg);
+  border-left: 4px solid var(--sd-primary);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
   margin: 1.75rem 0;
 }
 
 .callout-info .callout-label {
-  color: #1d4ed8;
+  color: var(--sd-primary);
+  font-family: var(--font-grotesk);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .callout-info p {
-  color: #374151;
-  margin: 0;
-  font-style: italic;
-}
-
-/* Case Study — light gray panel with slate border */
-.callout-case-study {
-  background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  padding: 1.1rem 1.25rem;
-  margin: 1.75rem 0;
-}
-
-.callout-case-study .callout-label {
-  color: #475569;
-  border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 0.5rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.72rem;
-}
-
-.callout-case-study p {
-  color: #374151;
+  color: var(--sd-foreground);
+  font-size: 0.875rem;
+  line-height: 1.7;
   margin: 0;
   font-style: normal;
 }
 
+/* Case Study — white card with border + subtle shadow */
+.callout-case-study {
+  background: #ffffff;
+  border: 1px solid var(--sd-border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin: 1.75rem 0;
+  box-shadow: var(--sd-card-shadow);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.callout-case-study:hover {
+  box-shadow: var(--sd-card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+.callout-case-study .callout-label {
+  color: var(--sd-primary);
+  font-family: var(--font-grotesk);
+  border-bottom: 1px solid var(--sd-border);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.callout-case-study p {
+  color: var(--sd-muted-foreground);
+  margin: 0;
+  font-style: normal;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
 /* ────────────────────────────────────────────────────────────────────
-   Big stat block — dark navy (like reference blog-stat-block)
-   Used for [STAT: value] callouts
+   Big stat block — dark navy (reference: blog-stat-block)
+   bg: hsl(240, 50%, 20%) | radius: rounded-2xl | centered | Varela Round value
    ──────────────────────────────────────────────────────────────────── */
 .blog-stat-block {
-  background: #1e1b4b;
-  border-radius: 16px;
-  padding: 2rem 2.25rem;
+  background: var(--sd-brand-indigo-dark);
+  color: #ffffff;
+  border-radius: 1rem;
+  padding: 1.5rem;
   text-align: center;
   margin: 2rem 0;
 }
 
 .blog-stat-block .stat-value {
-  font-size: 3rem;
-  font-weight: 800;
+  font-family: var(--font-varela);
+  font-size: 2.5rem;
+  font-weight: 700;
   color: #ffffff;
-  line-height: 1;
-  margin-bottom: 0.6rem;
-  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0 0 0.25rem;
+}
+
+@media (min-width: 768px) {
+  .blog-stat-block .stat-value {
+    font-size: 2.25rem;
+  }
 }
 
 .blog-stat-block .stat-label {
+  font-family: var(--font-body);
   font-size: 0.875rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .blog-stat-block .stat-source {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.4);
-  margin-top: 0.4rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 0.25rem;
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   Insight card — lime/green left border (like reference InsightCard)
-   Used for [INSIGHT: icon | title | desc] callouts
+   Insight card — pale lime with lime left border (reference: report-insight-card)
+   bg: hsl(68, 80%, 90%) | left border 4px hsl(68, 85%, 55%)
    ──────────────────────────────────────────────────────────────────── */
 .blog-insight-card {
-  background: #f7fee7;
-  border-left: 4px solid #84cc16;
-  border-radius: 0 12px 12px 0;
-  padding: 1.1rem 1.25rem;
+  background: var(--sd-brand-lime-light);
+  border-left: 4px solid var(--sd-brand-lime);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
   margin: 1.75rem 0;
   display: flex;
-  gap: 0.875rem;
+  gap: 0.75rem;
   align-items: flex-start;
 }
 
 .blog-insight-card .insight-icon {
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   flex-shrink: 0;
-  margin-top: 0.05rem;
+  line-height: 1.4;
 }
 
 .blog-insight-card .insight-title {
+  font-family: var(--font-grotesk);
   font-weight: 600;
-  font-size: 0.9rem;
-  color: #365314;
+  font-size: 0.875rem;
+  color: var(--sd-foreground);
   margin: 0 0 0.25rem;
 }
 
 .blog-insight-card .insight-desc {
-  font-size: 0.82rem;
-  color: #4d7c0f;
-  line-height: 1.6;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--sd-muted-foreground);
+  line-height: 1.625;
   margin: 0;
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   Full CTA gradient section — StatDoctor join prompt
+   CTA gradient section — reference: cta-gradient
+   linear-gradient(135deg, hsl(240,55%,55%), hsl(250,50%,50%))
    ──────────────────────────────────────────────────────────────────── */
 .post-cta-section {
-  background: linear-gradient(135deg, #3730a3 0%, #6d28d9 100%);
-  border-radius: 20px;
-  padding: 2.75rem 2.25rem;
+  background: linear-gradient(
+    135deg,
+    var(--sd-primary),
+    var(--sd-primary-purple)
+  );
+  color: #ffffff;
+  border-radius: 1rem;
+  padding: 2rem;
   margin: 2.5rem 0;
   text-align: center;
 }
 
+@media (min-width: 768px) {
+  .post-cta-section {
+    padding: 3rem;
+  }
+}
+
 .post-cta-section h3 {
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-family: var(--font-varela);
+  font-size: 1.875rem;
+  font-weight: 400;
   color: #ffffff;
-  margin: 0 0 0.75rem;
-  letter-spacing: -0.025em;
-  line-height: 1.25;
+  margin: 0 0 1rem;
+  line-height: 1.2;
+}
+
+@media (min-width: 768px) {
+  .post-cta-section h3 {
+    font-size: 2.25rem;
+  }
 }
 
 .post-cta-section > p {
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 0.95rem;
+  font-family: var(--font-body);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.875rem;
   line-height: 1.7;
-  margin: 0 0 1.5rem;
-  max-width: 480px;
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
+  margin: 0 auto 1.5rem;
+  max-width: 540px;
+}
+
+@media (min-width: 768px) {
+  .post-cta-section > p {
+    font-size: 1rem;
+  }
 }
 
 .post-cta-tagline {
-  font-size: 0.72rem !important;
-  color: rgba(255, 255, 255, 0.42) !important;
+  font-family: var(--font-body);
+  font-size: 0.75rem !important;
+  color: rgba(255, 255, 255, 0.6) !important;
   margin: 1rem 0 0 !important;
 }
 
 .post-cta-btn {
   display: inline-block;
-  background: #a3e635;
-  color: #1a2e05;
-  font-weight: 700;
-  font-size: 0.88rem;
-  padding: 0.7rem 1.6rem;
-  border-radius: 50px;
+  background: var(--sd-brand-lime);
+  color: var(--sd-foreground);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.625rem 1.5rem;
+  border-radius: 0.5rem;
   text-decoration: none !important;
   border: none !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  margin: 0.3rem;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  margin: 0.25rem;
 }
 
 .post-cta-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(163, 230, 53, 0.4);
+  background: var(--sd-brand-lime-dark);
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .post-cta-btn-outline {
   background: transparent !important;
   color: #ffffff !important;
-  border: 1.5px solid rgba(255, 255, 255, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
 .post-cta-btn-outline:hover {
   background: rgba(255, 255, 255, 0.1) !important;
-  box-shadow: none !important;
+  color: #ffffff !important;
+  transform: none !important;
 }
 
 /* ────────────────────────────────────────────────────────────────────
-   Inline article image with caption
+   Blog quote — reference: blog-quote
+   4px solid hsl(240, 55%, 55%) left border, italic, Varela Round
+   ──────────────────────────────────────────────────────────────────── */
+.blog-quote {
+  border-left: 4px solid var(--sd-primary);
+  padding: 0.5rem 0 0.5rem 1.5rem;
+  margin: 1.75rem 0;
+  font-style: italic;
+  color: var(--sd-muted-foreground);
+}
+
+.blog-quote .quote-text {
+  font-family: var(--font-varela);
+  font-size: 1.125rem;
+  margin: 0 0 0.5rem;
+}
+
+.blog-quote .quote-author {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--sd-foreground);
+}
+
+.blog-quote .quote-role {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-style: normal;
+  color: var(--sd-muted-foreground);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   Inline article image — reference: blog-image-placeholder
+   rounded-xl, min-height 240px
    ──────────────────────────────────────────────────────────────────── */
 .post-inline-img {
   margin: 2rem 0;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  min-height: 240px;
 }
 
 .post-inline-img img {
   width: 100%;
-  border-radius: 14px;
+  height: auto;
   display: block;
-  border: 1px solid #e5e7eb;
+  object-fit: cover;
 }
 
 .post-inline-img figcaption {
+  font-family: var(--font-body);
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--sd-muted-foreground);
   text-align: center;
   margin-top: 0.5rem;
   font-style: italic;
+  padding: 0 0.5rem;
 }

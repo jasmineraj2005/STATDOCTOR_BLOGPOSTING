@@ -314,7 +314,17 @@ export default function PostDetail({ post }: { post: Post }) {
           {/* Back link */}
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-xs text-white/45 hover:text-white/80 font-light mb-6 transition-colors duration-200"
+            className="inline-flex items-center gap-1.5 text-sm font-medium mb-6 transition-colors duration-200"
+            style={{
+              color: "hsl(240, 20%, 46%)",
+              fontFamily: "var(--font-montserrat), sans-serif",
+            }}
+            onMouseEnter={(e) => {
+              ;(e.currentTarget as HTMLElement).style.color = "hsl(240, 50%, 20%)"
+            }}
+            onMouseLeave={(e) => {
+              ;(e.currentTarget as HTMLElement).style.color = "hsl(240, 20%, 46%)"
+            }}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -326,38 +336,57 @@ export default function PostDetail({ post }: { post: Post }) {
           <div
             className="rounded-2xl p-8 md:p-12 mb-4"
             style={{
-              background: "linear-gradient(135deg, #8b5cf6 0%, #1e1b4b 55%, #050508 100%)",
-              border: "1px solid rgba(139,92,246,0.4)",
+              background:
+                "linear-gradient(160deg, hsl(250, 60%, 82%), hsl(240, 55%, 55%), hsl(240, 50%, 40%))",
             }}
           >
             <span
-              className="inline-block text-[10px] font-medium tracking-widest uppercase px-3 py-1 rounded-full mb-5"
-              style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.9)" }}
+              className="inline-block text-[11px] tracking-widest uppercase px-3 py-1 rounded-md mb-5"
+              style={{
+                background: "hsl(68, 85%, 55%)",
+                color: "hsl(240, 50%, 20%)",
+                fontFamily: "var(--font-space-grotesk), sans-serif",
+                fontWeight: 700,
+              }}
             >
               {pillarLabel} · {post.reading_time_minutes} min read
             </span>
 
             <h1
-              className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 leading-tight max-w-3xl"
-              style={{ letterSpacing: "-0.03em" }}
+              className="text-4xl md:text-5xl lg:text-6xl text-white mb-4 leading-tight max-w-3xl"
+              style={{
+                fontFamily: "var(--font-varela-round), sans-serif",
+                fontWeight: 400,
+              }}
             >
               {post.title}
             </h1>
 
-            <p className="text-base text-white/60 font-light mb-8 max-w-2xl leading-relaxed">
+            <p
+              className="text-base md:text-lg text-white/90 font-light mb-8 max-w-2xl leading-relaxed"
+              style={{ fontFamily: "var(--font-montserrat), sans-serif" }}
+            >
               {post.meta_description}
             </p>
 
             <div className="flex items-center gap-3">
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-                style={{ background: "rgba(255,255,255,0.18)" }}
+                style={{
+                  background: "rgba(255,255,255,0.2)",
+                  fontFamily: "var(--font-space-grotesk), sans-serif",
+                }}
               >
                 SD
               </div>
-              <div>
-                <p className="text-sm font-medium text-white/90">StatDoctor Editorial</p>
-                <p className="text-xs text-white/45">Published {generated}</p>
+              <div style={{ fontFamily: "var(--font-montserrat), sans-serif" }}>
+                <p className="text-sm font-medium text-white">StatDoctor Editorial</p>
+                <p
+                  className="text-xs text-white/70 tracking-widest uppercase mt-0.5"
+                  style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}
+                >
+                  Published {generated}
+                </p>
               </div>
             </div>
           </div>
@@ -372,7 +401,10 @@ export default function PostDetail({ post }: { post: Post }) {
                 className="w-full rounded-2xl block"
               />
               {post.image_credit && (
-                <p className="text-[11px] text-white/28 font-light mt-2 px-1">
+                <p
+                  className="text-[11px] font-light mt-2 px-1 italic"
+                  style={{ color: "hsl(240, 20%, 46%)" }}
+                >
                   {post.image_credit}
                 </p>
               )}
@@ -380,23 +412,44 @@ export default function PostDetail({ post }: { post: Post }) {
           )}
 
           {/* ── Stat Strip ──────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             {statStrip.map(({ value, label }) => {
-              const isViolet = label === "read time" || label === "sources cited"
+              const isIndigo = label === "read time" || label === "sources cited"
               return (
                 <div
                   key={label}
-                  className="rounded-xl p-4 transition-all duration-200 hover:scale-[1.02]"
+                  className="rounded-2xl p-6 text-center transition-all duration-300"
                   style={{
                     background: "#ffffff",
-                    border: "1px solid #e5e7eb",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                    border: "1px solid hsl(245, 25%, 90%)",
+                    boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.08)",
+                  }}
+                  onMouseEnter={(e) => {
+                    ;(e.currentTarget as HTMLElement).style.boxShadow =
+                      "0 8px 40px -8px hsl(240 50% 20% / 0.15)"
+                    ;(e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"
+                  }}
+                  onMouseLeave={(e) => {
+                    ;(e.currentTarget as HTMLElement).style.boxShadow =
+                      "0 4px 24px -4px hsl(240 50% 20% / 0.08)"
+                    ;(e.currentTarget as HTMLElement).style.transform = "translateY(0)"
                   }}
                 >
-                  <p className="text-2xl font-bold" style={{ color: "#111827" }}>{value}</p>
                   <p
-                    className="text-xs font-medium mt-0.5 uppercase tracking-wide"
-                    style={{ color: isViolet ? "#7c3aed" : "#9ca3af" }}
+                    className="text-3xl md:text-4xl font-bold mb-1"
+                    style={{
+                      color: "hsl(240, 50%, 20%)",
+                      fontFamily: "var(--font-varela-round), sans-serif",
+                    }}
+                  >
+                    {value}
+                  </p>
+                  <p
+                    className="text-xs font-semibold tracking-widest uppercase"
+                    style={{
+                      color: isIndigo ? "hsl(240, 55%, 55%)" : "hsl(240, 20%, 46%)",
+                      fontFamily: "var(--font-space-grotesk), sans-serif",
+                    }}
                   >
                     {label}
                   </p>
@@ -413,8 +466,8 @@ export default function PostDetail({ post }: { post: Post }) {
               className="rounded-2xl p-8 md:p-10 min-w-0"
               style={{
                 background: "#ffffff",
-                border: "1px solid #e5e7eb",
-                boxShadow: "0 4px 24px rgba(0,0,0,0.06)",
+                border: "1px solid hsl(245, 25%, 90%)",
+                boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.08)",
               }}
             >
               {/* Main article content (before FAQ) */}
@@ -432,8 +485,11 @@ export default function PostDetail({ post }: { post: Post }) {
                 <div className="mt-10">
                   <h2
                     id="frequently-asked-questions"
-                    className="text-xl font-semibold mb-5"
-                    style={{ letterSpacing: "-0.02em", color: "#111827" }}
+                    className="text-2xl md:text-3xl mb-5"
+                    style={{
+                      color: "hsl(240, 50%, 20%)",
+                      fontFamily: "var(--font-varela-round), sans-serif",
+                    }}
                   >
                     Frequently Asked Questions
                   </h2>
@@ -443,7 +499,10 @@ export default function PostDetail({ post }: { post: Post }) {
 
               {/* Sources section */}
               {sources && (
-                <article className="post-prose mt-10 pt-8" style={{ borderTop: "1px solid #e5e7eb" }}>
+                <article
+                  className="post-prose mt-10 pt-8"
+                  style={{ borderTop: "1px solid hsl(245, 25%, 90%)" }}
+                >
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={mdComponents as any}
@@ -462,30 +521,49 @@ export default function PostDetail({ post }: { post: Post }) {
 
               {/* Quick Stat */}
               <div
-                className="rounded-2xl p-5"
+                className="rounded-2xl p-6 text-center"
                 style={{
-                  background: "linear-gradient(135deg, rgba(139,92,246,0.22), rgba(30,27,75,0.65))",
-                  border: "1px solid rgba(139,92,246,0.35)",
+                  background: "hsl(240, 50%, 20%)",
+                  color: "#ffffff",
                 }}
               >
-                <p className="text-[10px] font-medium tracking-widest uppercase text-violet-400 mb-3">
+                <p
+                  className="text-xs font-semibold tracking-widest uppercase mb-2"
+                  style={{
+                    color: "hsl(68, 85%, 55%)",
+                    fontFamily: "var(--font-space-grotesk), sans-serif",
+                  }}
+                >
                   Quick Stat
                 </p>
-                <p className="text-3xl font-bold text-white">{post.sources.length}</p>
-                <p className="text-sm text-violet-200/55 mt-1 font-light leading-snug">
+                <p
+                  className="text-4xl font-bold mb-1"
+                  style={{ fontFamily: "var(--font-varela-round), sans-serif" }}
+                >
+                  {post.sources.length}
+                </p>
+                <p
+                  className="text-sm font-light leading-snug"
+                  style={{
+                    color: "rgba(255,255,255,0.8)",
+                    fontFamily: "var(--font-montserrat), sans-serif",
+                  }}
+                >
                   sources verified for this article
                 </p>
               </div>
 
               {/* Focus keyword */}
               <MetaCard title="Focus keyword">
-                <p className="text-sm text-white/80 font-light">{post.focus_keyword}</p>
+                <p className="text-sm font-medium">{post.focus_keyword}</p>
               </MetaCard>
 
               {/* Meta title */}
               <MetaCard title="Meta title">
-                <p className="text-sm text-white/80 font-light leading-relaxed">{post.meta_title}</p>
-                <p className="text-[10px] text-white/28 mt-2">{post.meta_title.length} chars</p>
+                <p className="text-sm font-light leading-relaxed">{post.meta_title}</p>
+                <p className="text-[10px] mt-2" style={{ color: "hsl(240, 20%, 46%)" }}>
+                  {post.meta_title.length} chars
+                </p>
               </MetaCard>
 
               {/* Keywords */}
@@ -494,10 +572,11 @@ export default function PostDetail({ post }: { post: Post }) {
                   {post.target_keywords.map((kw) => (
                     <span
                       key={kw}
-                      className="text-[11px] text-white/65 px-2 py-0.5 rounded-md font-light"
+                      className="text-[11px] px-2 py-0.5 rounded-md font-medium"
                       style={{
-                        background: "rgba(255,255,255,0.06)",
-                        border: "1px solid rgba(255,255,255,0.10)",
+                        background: "hsl(245, 25%, 93%)",
+                        color: "hsl(240, 50%, 20%)",
+                        border: "1px solid hsl(245, 25%, 90%)",
                       }}
                     >
                       {kw}
@@ -511,17 +590,21 @@ export default function PostDetail({ post }: { post: Post }) {
                 <div className="flex items-center gap-2 mb-2">
                   <span
                     className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ background: post.ahpra_passed ? "#a7f3d0" : "#fcd34d" }}
+                    style={{ background: post.ahpra_passed ? "hsl(68, 70%, 40%)" : "#f59e0b" }}
                   />
-                  <span className="text-sm text-white/85 font-light">
+                  <span className="text-sm font-medium">
                     {post.ahpra_passed ? "Passed" : "Review needed"}
                   </span>
                 </div>
                 {post.ahpra_flags.length > 0 && (
                   <ul className="flex flex-col gap-1.5 mt-2">
                     {post.ahpra_flags.map((flag, i) => (
-                      <li key={i} className="text-[11px] text-white/48 font-light leading-relaxed">
-                        <span className="text-white/30">
+                      <li
+                        key={i}
+                        className="text-[11px] font-light leading-relaxed"
+                        style={{ color: "hsl(240, 20%, 46%)" }}
+                      >
+                        <span style={{ color: "hsl(240, 20%, 46%)" }}>
                           {flag.requires_human_review ? "⚠ " : "✓ "}
                         </span>
                         {flag.fix_applied}
@@ -533,7 +616,10 @@ export default function PostDetail({ post }: { post: Post }) {
 
               {/* Slug */}
               <MetaCard title="Slug">
-                <code className="text-xs text-violet-300 font-mono break-all">
+                <code
+                  className="text-xs font-mono break-all"
+                  style={{ color: "hsl(240, 55%, 55%)" }}
+                >
                   /blog/{post.slug}
                 </code>
               </MetaCard>
@@ -556,18 +642,24 @@ function MetaCard({
 }) {
   return (
     <div
-      className="rounded-2xl p-5"
+      className="rounded-2xl p-5 transition-all duration-300"
       style={{
-        background: "rgba(255, 255, 255, 0.06)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        border: "1px solid rgba(255, 255, 255, 0.11)",
+        background: "#ffffff",
+        border: "1px solid hsl(245, 25%, 90%)",
+        boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.08)",
+        fontFamily: "var(--font-montserrat), sans-serif",
       }}
     >
-      <h3 className="text-[10px] font-medium tracking-widest uppercase text-white/38 mb-3">
+      <h3
+        className="text-xs font-semibold tracking-widest uppercase mb-3"
+        style={{
+          color: "hsl(240, 55%, 55%)",
+          fontFamily: "var(--font-space-grotesk), sans-serif",
+        }}
+      >
         {title}
       </h3>
-      {children}
+      <div style={{ color: "hsl(240, 50%, 20%)" }}>{children}</div>
     </div>
   )
 }

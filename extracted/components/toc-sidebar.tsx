@@ -39,34 +39,56 @@ export default function TocSidebar({ items }: { items: TocItem[] }) {
     <div
       className="rounded-2xl p-5"
       style={{
-        background: "rgba(255, 255, 255, 0.06)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        border: "1px solid rgba(255, 255, 255, 0.12)",
+        background: "#ffffff",
+        border: "1px solid hsl(245, 25%, 90%)",
+        boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.08)",
       }}
     >
-      <p className="text-[10px] font-medium tracking-widest uppercase text-violet-400 mb-4">
+      <p
+        className="text-xs font-semibold tracking-widest uppercase mb-3"
+        style={{
+          color: "hsl(240, 55%, 55%)",
+          fontFamily: "var(--font-space-grotesk), sans-serif",
+        }}
+      >
         In This Guide
       </p>
-      <nav className="flex flex-col">
-        {items.map((item) => (
-          <a
-            key={item.id}
-            href={`#${item.id}`}
-            onClick={(e) => {
-              e.preventDefault()
-              document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })
-              setActiveId(item.id)
-            }}
-            className={`text-sm py-1.5 pl-3 leading-snug transition-all duration-200 border-l-2 ${
-              activeId === item.id
-                ? "text-violet-300 border-violet-500 font-medium"
-                : "text-white/40 border-white/10 hover:text-white/75 hover:border-violet-400/50"
-            }`}
-          >
-            {item.text}
-          </a>
-        ))}
+      <nav className="flex flex-col space-y-0.5">
+        {items.map((item) => {
+          const isActive = activeId === item.id
+          return (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              onClick={(e) => {
+                e.preventDefault()
+                document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+                setActiveId(item.id)
+              }}
+              className="block text-sm py-1.5 leading-snug transition-all duration-200"
+              style={{
+                color: isActive ? "hsl(240, 55%, 55%)" : "hsl(240, 20%, 46%)",
+                fontWeight: isActive ? 600 : 400,
+                paddingLeft: isActive ? "0.5rem" : "0",
+                fontFamily: "var(--font-montserrat), sans-serif",
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  ;(e.currentTarget as HTMLElement).style.color = "hsl(240, 55%, 55%)"
+                  ;(e.currentTarget as HTMLElement).style.paddingLeft = "0.5rem"
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  ;(e.currentTarget as HTMLElement).style.color = "hsl(240, 20%, 46%)"
+                  ;(e.currentTarget as HTMLElement).style.paddingLeft = "0"
+                }
+              }}
+            >
+              {item.text}
+            </a>
+          )
+        })}
       </nav>
     </div>
   )
