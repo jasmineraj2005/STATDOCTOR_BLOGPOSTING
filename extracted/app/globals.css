@@ -486,6 +486,57 @@ nextjs-portal,
   margin-bottom: 0.5rem;
 }
 
+/* Key Facts — neutral grey intro box, placed right after TL;DR */
+.callout-key-facts {
+  background: hsl(245, 25%, 96%);
+  border: 1px solid hsl(245, 25%, 90%);
+  border-radius: 1rem;
+  padding: 1.5rem 1.75rem;
+  margin: 2rem 0 2.5rem;
+}
+
+.callout-key-facts .callout-label {
+  display: block;
+  color: var(--sd-foreground);
+  font-family: var(--font-grotesk);
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.85rem;
+}
+
+.callout-key-facts ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.callout-key-facts li {
+  position: relative;
+  padding-left: 1.25rem;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--sd-foreground);
+  line-height: 1.55;
+}
+
+.callout-key-facts li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--sd-primary);
+  font-weight: 700;
+}
+
+.callout-key-facts strong {
+  color: var(--sd-foreground);
+  font-weight: 600;
+}
+
 /* Key Takeaway — lime summary box (reference: blog-summary-box) */
 .callout-takeaway {
   background: var(--sd-brand-lime-light);

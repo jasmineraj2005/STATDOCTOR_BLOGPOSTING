@@ -276,9 +276,21 @@ Rules:
     image_query = f"doctor Australia medical {topic.target_keywords[0]}"
     image_url, image_credit, image_description = _fetch_unsplash_image(image_query)
     if image_url:
-        print(f"  [Researcher] Image found: {image_credit}")
+        print(f"  [Researcher] Hero image: {image_credit}")
     else:
-        print("  [Researcher] No image (UNSPLASH_ACCESS_KEY missing or error)")
+        print("  [Researcher] No hero image (UNSPLASH_ACCESS_KEY missing or error)")
+
+    # Additional inline images for mid-article placement
+    inline_queries = [
+        f"hospital workplace Australia {topic.pillar.value.replace('_', ' ')}",
+        f"medical professional {topic.target_keywords[-1] if topic.target_keywords else 'healthcare'}",
+    ]
+    inline_images: list[str] = []
+    for q in inline_queries:
+        url, _, _ = _fetch_unsplash_image(q)
+        if url:
+            inline_images.append(url)
+    print(f"  [Researcher] {len(inline_images)} inline images fetched")
 
     stats_list = data.get("statistics", [])
     chart_url = _build_chart_url(stats_list, topic.title)
@@ -297,6 +309,7 @@ Rules:
         image_credit=image_credit,
         image_description=image_description,
         chart_url=chart_url,
+        inline_images=inline_images,
     )
 
     print(f"  [Researcher] {len(all_sources)} sources | {len(brief.key_facts)} facts | {len(brief.statistics)} stats")

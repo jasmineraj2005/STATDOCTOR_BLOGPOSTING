@@ -65,6 +65,22 @@ INLINE CHART — embed exactly once, after the second H2 section. Use this ready
     else:
         chart_instruction = "INLINE CHART — no chart URL available for this article. Skip the chart."
 
+    # Inline image instructions (3 total: hero handled separately, 2 inline placements)
+    inline_img_instruction = ""
+    if research.inline_images:
+        img_lines = []
+        for idx, url in enumerate(research.inline_images[:2]):
+            position = "after the 3rd H2 section" if idx == 0 else "after the 5th H2 section"
+            img_lines.append(
+                f'![Locum doctors at work in Australia]({url})  ← embed {position}'
+            )
+        inline_img_instruction = (
+            "INLINE IMAGES — you MUST embed these two images at the positions noted. "
+            "Use the exact markdown image syntax shown:\n" + "\n".join(img_lines)
+        )
+    else:
+        inline_img_instruction = "INLINE IMAGES — none provided. Skip inline images."
+
     prompt = f"""You are an expert medical content writer for StatDoctor ({SITE_URL}), Australia's locum doctor marketplace.
 
 Write a complete, publication-ready blog post. You MUST write at least {MIN_WORDS} words — this is a hard requirement, not a suggestion. Target {MAX_WORDS} words. Each H2 section must have at least 3 paragraphs. The FAQ section must have at least 6 Q&A pairs. Do not stop early — a short post is a failed post.
@@ -120,24 +136,53 @@ BODY RULES:
 6. CTA paragraph after FAQ: one paragraph, plain text, mentioning StatDoctor with a link [{SITE_URL}]({SITE_URL})
 7. Final section: ## Sources — numbered list matching the sources provided
 
-CALLOUT BOXES — use these in the body for visual richness. Mix types for variety:
+VISUAL RICHNESS — this is mandatory, not optional. The article MUST include the following callout boxes
+in the body. A plain-text wall of paragraphs is unacceptable. Mix types for variety, spread them through
+the article so every 2–3 H2 sections has a visual element:
 
-BIG STAT BLOCK — bold navy card, use once for the single most striking figure in the article:
+REQUIRED CALLOUT QUOTAS:
+- 1 × Key Facts box (placed immediately after the TL;DR, before the first H2)
+- 1 × Big Stat block (anywhere in the body — the single most striking figure)
+- 2 × Insight cards (lime tip cards, scattered through the article)
+- 2 × Key Takeaway boxes (at the end of two of the most important sections)
+- 1 × Pro Tip (practical advice from an editorial voice)
+- 1 × Info / regulatory note (AHPRA, Medicare, or compliance fact)
+- 1 × Case Study (only if a genuine real-world example exists; otherwise skip)
+- Subtle emoji prefix on 4–5 H2 headings (📍 for location/state sections, 💰 for pay/rate sections,
+  📋 for steps/processes, ⚖️ for legal/compliance sections, 🩺 for clinical sections,
+  📈 for trend/data sections, 🤝 for marketplace/agency sections)
+
+CALLOUT SYNTAX:
+
+KEY FACTS box (grey card with bullet summary — placed right after TL;DR):
+> [KEY FACTS]
+> - **Average rate:** $1,850/day for emergency locum (capital cities)
+> - **Lead time:** Most shifts booked 2–6 weeks in advance
+> - **Top demand:** Rural NSW, regional QLD
+
+BIG STAT block (bold navy card, use once for the single most striking figure):
 > [STAT: $1,850/day] Average daily rate for metropolitan locum emergency physicians — AMA Locum Survey 2023
 
-INSIGHT CARD — lime-tinted tip card, use 1–2 times:
+INSIGHT CARD (lime-tinted tip card):
 > [INSIGHT: 💡 | Smart Tip | One specific, actionable sentence that helps a locum doctor]
 
-KEY TAKEAWAY — green summary box at end of an important section:
+KEY TAKEAWAY (lime summary box at end of an important section):
 > [KEY TAKEAWAY] One sentence that encapsulates the core insight of this section.
 
-INFO / TIP — blue informational note:
-> [INFO] A supporting regulatory fact, compliance note, or practical tip for the reader.
+PRO TIP (indigo callout box):
+> [INFO] **Pro tip:** Always negotiate the indemnity coverage before accepting a remote shift — many
+> regional hospitals assume locums carry their own.
 
-CASE STUDY — gray bordered panel (use only when a genuine example exists):
-> [CASE STUDY: Organisation or Hospital Name] Two to three sentences describing what happened and the outcome.
+INFO / regulatory note (indigo callout box):
+> [INFO] AHPRA's Good Medical Practice code requires advertised credentials to be verifiable on the
+> public register before commencing any locum shift.
+
+CASE STUDY (white card with shadow):
+> [CASE STUDY: Organisation or Hospital Name] Two to three sentences describing what happened.
 
 {chart_instruction}
+
+{inline_img_instruction}
 
 CHECKLIST ITEMS — when listing benefits, features, or steps where each item has a title and explanation, use this format:
 - **Title of benefit**: One sentence explaining the practical benefit for locum doctors.

@@ -130,6 +130,14 @@ export default function PostDetail({ post }: { post: Post }) {
         )
       }
 
+      if (text.includes("[KEY FACTS]")) {
+        return (
+          <div className="callout-key-facts">
+            <span className="callout-label">📌 Key Facts</span>
+            {children}
+          </div>
+        )
+      }
       if (text.includes("[KEY TAKEAWAY]")) {
         return (
           <div className="callout-takeaway">
@@ -324,14 +332,14 @@ export default function PostDetail({ post }: { post: Post }) {
 
           {/* ── Hero Banner ─────────────────────────────────────────────── */}
           <div
-            className="rounded-2xl p-8 md:p-12 mb-4"
+            className="rounded-2xl p-5 md:p-7 mb-4"
             style={{
               background:
                 "linear-gradient(160deg, hsl(250, 60%, 82%), hsl(240, 55%, 55%), hsl(240, 50%, 40%))",
             }}
           >
             <span
-              className="inline-block text-[11px] tracking-widest uppercase px-3 py-1 rounded-md mb-5"
+              className="inline-block text-[10px] tracking-widest uppercase px-2.5 py-0.5 rounded-md mb-3"
               style={{
                 background: "hsl(68, 85%, 55%)",
                 color: "hsl(240, 50%, 20%)",
@@ -343,25 +351,26 @@ export default function PostDetail({ post }: { post: Post }) {
             </span>
 
             <h1
-              className="text-4xl md:text-5xl lg:text-6xl text-white mb-4 leading-tight max-w-3xl"
+              className="text-2xl md:text-3xl text-white mb-2 leading-tight max-w-3xl"
               style={{
                 fontFamily: "var(--font-varela-round), sans-serif",
                 fontWeight: 400,
+                letterSpacing: "-0.01em",
               }}
             >
               {post.title}
             </h1>
 
             <p
-              className="text-base md:text-lg text-white/90 font-light mb-8 max-w-2xl leading-relaxed"
+              className="text-xs md:text-sm text-white/85 font-light mb-4 max-w-2xl leading-relaxed"
               style={{ fontFamily: "var(--font-montserrat), sans-serif" }}
             >
               {post.meta_description}
             </p>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+                className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold text-white flex-shrink-0"
                 style={{
                   background: "rgba(255,255,255,0.2)",
                   fontFamily: "var(--font-space-grotesk), sans-serif",
@@ -370,9 +379,9 @@ export default function PostDetail({ post }: { post: Post }) {
                 SD
               </div>
               <div style={{ fontFamily: "var(--font-montserrat), sans-serif" }}>
-                <p className="text-sm font-medium text-white">StatDoctor Editorial</p>
+                <p className="text-xs font-medium text-white leading-tight">StatDoctor Editorial</p>
                 <p
-                  className="text-xs text-white/70 tracking-widest uppercase mt-0.5"
+                  className="text-[10px] text-white/70 tracking-widest uppercase mt-0.5"
                   style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}
                 >
                   Published {generated}
@@ -389,6 +398,7 @@ export default function PostDetail({ post }: { post: Post }) {
                 src={post.image_url}
                 alt={post.og_image_alt}
                 className="w-full rounded-2xl block"
+                style={{ maxHeight: "420px", objectFit: "cover", objectPosition: "center" }}
               />
               {post.image_credit && (
                 <p

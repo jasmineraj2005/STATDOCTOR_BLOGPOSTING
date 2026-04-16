@@ -82,6 +82,7 @@ class ResearchBrief(BaseModel):
     image_credit: Optional[str] = None
     image_description: Optional[str] = None
     chart_url: Optional[str] = None  # Quickchart.io URL built from statistics
+    inline_images: list[str] = []  # Additional Unsplash URLs for in-article placement
 
 
 class BlogPost(BaseModel):
