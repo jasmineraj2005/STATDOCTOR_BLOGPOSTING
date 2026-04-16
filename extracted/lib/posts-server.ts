@@ -19,7 +19,7 @@ export function getAllPosts(): Post[] {
   const dir = outputDir()
   if (!fs.existsSync(dir)) return []
 
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"))
+  const files = fs.readdirSync(dir).filter((f) => /^\d{8}_\d{6}_.*\.json$/.test(f))
   const posts: Post[] = []
 
   for (const file of files) {
