@@ -7,6 +7,13 @@ import { PILLAR_LABELS, type Post } from "@/lib/posts"
 import TocSidebar, { type TocItem } from "@/components/toc-sidebar"
 import FaqAccordion, { type FaqItem } from "@/components/faq-accordion"
 import ReadingProgress from "@/components/reading-progress"
+import DisclaimerBanner from "@/components/disclaimer-banner"
+import WhoThisIsFor from "@/components/who-this-is-for"
+import AuthorBio from "@/components/author-bio"
+import RelatedArticles from "@/components/related-articles"
+import SocialShare from "@/components/social-share"
+import SourceImageGallery, { type SourceWithImage, type InlineImage } from "@/components/source-image-gallery"
+import JoinCTA from "@/components/join-cta"
 
 // ── Text helpers ─────────────────────────────────────────────────────────────
 
@@ -28,6 +35,52 @@ function extractNodeText(node: React.ReactNode): string {
     return extractNodeText((node.props as { children?: React.ReactNode }).children)
   }
   return ""
+}
+
+function stripMarker(children: React.ReactNode, pattern: RegExp): React.ReactNode {
+  return React.Children.map(children, (child) => {
+    if (!React.isValidElement(child)) return child
+    const childEl = child as React.ReactElement<{ children?: React.ReactNode }>
+    const fullText = extractNodeText(childEl.props?.children ?? null).trim()
+
+    // Entire child is just the marker — drop it
+    if (pattern.test(fullText) && fullText.replace(pattern, "").trim() === "") {
+      return null
+    }
+
+    // Marker embedded at start of a <p> — strip it from string children
+    if (childEl.type === "p" && pattern.test(fullText)) {
+      const newPChildren = React.Children.map(childEl.props?.children, (pChild) => {
+        if (typeof pChild === "string") {
+          return pChild.replace(pattern, "").replace(/^\s*/, "")
+        }
+        return pChild
+      })
+      return React.cloneElement(childEl, {}, newPChildren)
+    }
+
+    return child
+  })?.filter(Boolean) ?? []
+}
+
+function extractUrl(text: string): string | null {
+  const match = text.match(/https?:\/\/[^\s)>\]"']+/)
+  return match ? match[0] : null
+}
+
+// Move inline callout markers (> [TYPE] content) onto their own paragraph line
+// so stripMarker can reliably detect and remove the standalone marker.
+function preprocessCalloutMarkers(md: string): string {
+  return md.replace(
+    /^(> ?)\[(KEY TAKEAWAY|INFO|TIP|AU|NZ|INTERESTING FACT|INSIGHT|DONT WORRY|REASSURANCE|CASE STUDY:[^\]]+)\] +(.+)$/gm,
+    (_match, prefix, type, content) =>
+      `${prefix}[${type}]\n${prefix}\n${prefix}${content}`
+  )
+}
+
+// Split markdown into sections at each H2 boundary (keeps H2 with its section).
+function splitByH2(md: string): string[] {
+  return md.split(/(?=^## )/m).filter((s) => s.trim())
 }
 
 // ── Markdown parsers ─────────────────────────────────────────────────────────
@@ -55,7 +108,6 @@ function extractFaq(md: string): FaqItem[] {
   if (nextH2 > -1) section = section.slice(0, nextH2)
 
   const pairs: FaqItem[] = []
-  // Match **Q: ...** then A: ...
   const re = /\*\*Q:\s*([^*]+?)\*\*\s*\n+A:\s*([\s\S]*?)(?=\n\*\*Q:|$)/g
   let m
   while ((m = re.exec(section)) !== null) {
@@ -81,7 +133,15 @@ function splitAtFaq(md: string): { before: string; sources: string } {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function PostDetail({ post }: { post: Post }) {
+export default function PostDetail({
+  post,
+  relatedPosts = [],
+  sourceImages = [],
+}: {
+  post: Post
+  relatedPosts?: Post[]
+  sourceImages?: SourceWithImage[]
+}) {
   const pillarLabel = PILLAR_LABELS[post.pillar] ?? post.pillar
   const generated = new Date(post.generated_at).toLocaleDateString("en-AU", {
     day: "numeric",
@@ -89,20 +149,43 @@ export default function PostDetail({ post }: { post: Post }) {
     year: "numeric",
   })
 
-  const tocItems = extractH2s(post.content_markdown)
-  const faqItems = extractFaq(post.content_markdown)
-  const { before, sources } = splitAtFaq(post.content_markdown)
+  const processed = preprocessCalloutMarkers(post.content_markdown)
+  const tocItems = extractH2s(processed)
+  const faqItems = extractFaq(processed)
+  const { before, sources } = splitAtFaq(processed)
 
-  // Custom markdown component renderers
+  // Split article body into sections so we can inject source images between them
+  const contentSections = splitByH2(before)
+
+  // Build a flat list of attributed images for inline injection.
+  // Prefer inline chart/graphic images over OG cover images — they're more data-rich.
+  type AttributedImg = { src: string; caption: string; url: string; publisher: string; title: string }
+
+  const allInlineImgs: AttributedImg[] = []
+  for (const s of sourceImages) {
+    for (const img of s.inlineImages) {
+      allInlineImgs.push({ src: img.src, caption: img.caption, url: s.url, publisher: s.publisher, title: s.title })
+    }
+  }
+  // Fall back to OG images if no inline images were found
+  const sourcesWithOg = sourceImages.filter((s) => s.imageUrl)
+  if (allInlineImgs.length < 2) {
+    for (const s of sourcesWithOg.slice(1)) {
+      if (allInlineImgs.length >= 2) break
+      allInlineImgs.push({ src: s.imageUrl!, caption: s.snippet ?? s.title, url: s.url, publisher: s.publisher, title: s.title })
+    }
+  }
+
+  const heroSource = sourcesWithOg[0] ?? null
+  const inlineImgs = allInlineImgs.slice(0, 2)
+
   const mdComponents: Components = {
-    // Add anchor IDs to every H2 for TOC scroll-tracking
     h2: ({ children }) => {
       const text = extractNodeText(children)
       const id = slugify(text)
       return <h2 id={id}>{children}</h2>
     },
 
-    // Detect callout box types from blockquote content
     blockquote: ({ children }) => {
       const text = extractNodeText(children)
 
@@ -130,55 +213,176 @@ export default function PostDetail({ post }: { post: Post }) {
         )
       }
 
+      // [KEY FACTS]
       if (text.includes("[KEY FACTS]")) {
+        const filtered = stripMarker(children, /\[KEY FACTS\]/i)
         return (
           <div className="callout-key-facts">
-            <span className="callout-label">📌 Key Facts</span>
-            {children}
-          </div>
-        )
-      }
-      if (text.includes("[KEY TAKEAWAY]")) {
-        return (
-          <div className="callout-takeaway">
-            <span className="callout-label">✓ Key Takeaway</span>
-            {children}
-          </div>
-        )
-      }
-      if (text.match(/\[INFO\]|\[TIP\]/i)) {
-        return (
-          <div className="callout-info">
-            <span className="callout-label">ℹ Info</span>
-            {children}
-          </div>
-        )
-      }
-      if (text.match(/\[CASE STUDY/i)) {
-        const title = text.match(/\[CASE STUDY:\s*([^\]]+)\]/i)?.[1] ?? "Case Study"
-        return (
-          <div className="callout-case-study">
-            <span className="callout-label">📋 {title}</span>
-            {children}
-          </div>
-        )
-      }
-      // [STAT: value] — dark navy bold stat block
-      if (text.match(/\[STAT:/i)) {
-        const match = text.match(/\[STAT:\s*([^\]]+)\]\s*([\s\S]*)/)
-        const value = match?.[1]?.trim() ?? ""
-        const rest = match?.[2]?.trim() ?? ""
-        const [mainLabel, source] = rest.split(/—|–|\|/).map((s) => s.trim())
-        return (
-          <div className="blog-stat-block">
-            <p className="stat-value">{value}</p>
-            {mainLabel && <p className="stat-label">{mainLabel}</p>}
-            {source && <p className="stat-source">{source}</p>}
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>📌</span>
+                <span>Key Facts</span>
+              </div>
+            </div>
+            <div className="callout-content">
+              {filtered}
+              <p className="callout-sources-note">
+                Sources:{" "}
+                <a href="#sources">
+                  {post.sources.length} cited below ↓
+                </a>
+              </p>
+            </div>
           </div>
         )
       }
 
-      // [INSIGHT: icon | title | desc] — lime insight card
+      // [KEY TAKEAWAY]
+      if (text.includes("[KEY TAKEAWAY]")) {
+        const filtered = stripMarker(children, /\[KEY TAKEAWAY\]\s*/i)
+        return (
+          <div className="callout-takeaway">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>✓</span>
+                <span>Key Takeaway</span>
+              </div>
+            </div>
+            <div className="callout-content">
+              {filtered}
+            </div>
+          </div>
+        )
+      }
+
+      // [INFO] or [TIP]
+      if (text.match(/\[INFO\]|\[TIP\]/i)) {
+        const filtered = stripMarker(children, /\[(INFO|TIP)\]\s*/i)
+        return (
+          <div className="callout-info">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>ℹ</span>
+                <span>Info</span>
+              </div>
+            </div>
+            <div className="callout-content">
+              {filtered}
+            </div>
+          </div>
+        )
+      }
+
+      // [CASE STUDY: Title]
+      if (text.match(/\[CASE STUDY/i)) {
+        const title = text.match(/\[CASE STUDY:\s*([^\]]+)\]/i)?.[1] ?? "Case Study"
+        const filtered = stripMarker(children, /\[CASE STUDY:[^\]]+\]\s*/i)
+        const url = extractUrl(text)
+
+        // No real source URL — render as Key Insight instead of empty case study
+        if (!url) {
+          return (
+            <div className="callout-insight">
+              <div className="callout-header-band">
+                <div className="callout-header-band-left">
+                  <span>🔍</span>
+                  <span>Key Insight</span>
+                </div>
+              </div>
+              <div className="callout-content">{filtered}</div>
+            </div>
+          )
+        }
+
+        return (
+          <div className="callout-case-study">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>📋</span>
+                <span>{title}</span>
+              </div>
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="callout-header-band-link"
+                style={{ color: "#ffffff" }}
+              >
+                Read case study →
+              </a>
+            </div>
+            <div className="callout-content">
+              {filtered}
+            </div>
+          </div>
+        )
+      }
+
+      // [AU] — Australian Context
+      if (text.match(/\[AU\]/i)) {
+        const filtered = stripMarker(children, /\[AU\]\s*/i)
+        return (
+          <div className="callout-au">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>🇦🇺</span>
+                <span>Australian Context</span>
+              </div>
+            </div>
+            <div className="callout-content">
+              {filtered}
+            </div>
+          </div>
+        )
+      }
+
+      // [NZ] — New Zealand Context
+      if (text.match(/\[NZ\]/i)) {
+        const filtered = stripMarker(children, /\[NZ\]\s*/i)
+        return (
+          <div className="callout-nz">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>🇳🇿</span>
+                <span>New Zealand Context</span>
+              </div>
+            </div>
+            <div className="callout-content">
+              {filtered}
+            </div>
+          </div>
+        )
+      }
+
+      // [STAT: value]
+      if (text.match(/\[STAT:/i)) {
+        const match = text.match(/\[STAT:\s*([^\]]+)\]\s*([\s\S]*)/)
+        const value = match?.[1]?.trim() ?? ""
+        const rest = match?.[2]?.trim() ?? ""
+        const parts = rest.split(/—|–|\|/).map((s) => s.trim())
+        const mainLabel = parts[0] ?? ""
+        const sourceText = parts[1] ?? ""
+        const sourceUrl = extractUrl(sourceText) ?? extractUrl(rest)
+        return (
+          <div className="blog-stat-block">
+            <p className="stat-value">{value}</p>
+            {mainLabel && <p className="stat-label">{mainLabel}</p>}
+            {sourceText && (
+              <p className="stat-source">
+                {sourceUrl ? (
+                  <a href={sourceUrl} target="_blank" rel="noopener noreferrer" style={{ color: "rgba(255,255,255,0.7)", textDecoration: "underline" }}>
+                    Source: {sourceText.replace(sourceUrl, "").trim() || sourceText}
+                  </a>
+                ) : (
+                  <>Source: {sourceText}</>
+                )}
+              </p>
+            )}
+          </div>
+        )
+      }
+
+      // [INSIGHT: icon | title | desc]
       if (text.match(/\[INSIGHT:/i)) {
         const match = text.match(/\[INSIGHT:\s*([^\|]+)\|([^\|]+)\|([^\]]+)\]/)
         const icon = match?.[1]?.trim() ?? "💡"
@@ -195,19 +399,63 @@ export default function PostDetail({ post }: { post: Post }) {
         )
       }
 
-      // Default — disclaimer / note blockquote
+      // [INTERESTING FACT]
+      if (text.match(/\[INTERESTING FACT\]/i)) {
+        const filtered = stripMarker(children, /\[INTERESTING FACT\]\s*/i)
+        return (
+          <div className="callout-fact">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>⚡</span>
+                <span>Interesting Fact</span>
+              </div>
+            </div>
+            <div className="callout-content">{filtered}</div>
+          </div>
+        )
+      }
+
+      // [INSIGHT] — simple block (not the card format [INSIGHT: icon|title|desc])
+      if (text.match(/^\[INSIGHT\]/i)) {
+        const filtered = stripMarker(children, /\[INSIGHT\]\s*/i)
+        return (
+          <div className="callout-insight">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>🔍</span>
+                <span>Insight</span>
+              </div>
+            </div>
+            <div className="callout-content">{filtered}</div>
+          </div>
+        )
+      }
+
+      // [DONT WORRY] / [REASSURANCE]
+      if (text.match(/\[DONT WORRY\]|\[REASSURANCE\]/i)) {
+        const filtered = stripMarker(children, /\[(DONT WORRY|REASSURANCE)\]\s*/i)
+        return (
+          <div className="callout-reassure">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>🙌</span>
+                <span>Don&apos;t Worry</span>
+              </div>
+            </div>
+            <div className="callout-content">{filtered}</div>
+          </div>
+        )
+      }
+
       return <blockquote className="post-blockquote">{children}</blockquote>
     },
 
-    // Ordered list — violet numbered circles
     ol: ({ children }) => (
       <ol className="post-numbered-list">{children}</ol>
     ),
 
-    // Unordered list — detect checklist (items starting with bold) vs regular bullets
     ul: ({ children }) => {
       const items = React.Children.toArray(children)
-      // Count items where the first p-child's first element is a <strong>
       const boldCount = items.filter((child) => {
         if (!React.isValidElement(child)) return false
         const liChildren = React.Children.toArray(
@@ -227,12 +475,10 @@ export default function PostDetail({ post }: { post: Post }) {
       return <ul className="post-bullets">{children}</ul>
     },
 
-    // List item — render checklist card if starts with bold, else normal
     li: ({ children }) => {
       const childArray = React.Children.toArray(children)
       const firstChild = childArray[0]
 
-      // Detect: li > p > strong (react-markdown renders `- **Title**: desc` this way)
       if (React.isValidElement(firstChild) && (firstChild as React.ReactElement).type === "p") {
         const pChildren = React.Children.toArray(
           ((firstChild as React.ReactElement).props as { children?: React.ReactNode }).children
@@ -264,7 +510,6 @@ export default function PostDetail({ post }: { post: Post }) {
       return <li>{children}</li>
     },
 
-    // Paragraph — detect StatDoctor CTA paragraph → full gradient CTA section
     p: ({ children }) => {
       const text = extractNodeText(children)
       if (
@@ -292,31 +537,35 @@ export default function PostDetail({ post }: { post: Post }) {
       return <p>{children}</p>
     },
 
-    // Inline images — styled with caption
-    img: ({ src, alt }) => (
-      <figure className="post-inline-img">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src ?? ""} alt={alt ?? ""} loading="lazy" />
-        {alt && <figcaption>{alt}</figcaption>}
-      </figure>
-    ),
-  }
-
-  const statStrip = [
-    { value: post.word_count.toLocaleString(), label: "words" },
-    { value: `${post.reading_time_minutes} min`, label: "read time" },
-    { value: String(post.sources.length), label: "sources cited" },
-    {
-      value: post.ahpra_passed ? "✓" : "⚠",
-      label: post.ahpra_passed ? "AHPRA compliant" : "AHPRA review",
+    img: ({ src, alt }) => {
+      if (!src || typeof src !== "string") return null
+      // Filter generic stock photos and chart services — source images injected separately
+      if (
+        src.includes("quickchart.io") ||
+        src.includes("placeholder") ||
+        src.includes("unsplash.com")
+      ) return null
+      return (
+        <figure className="post-inline-img">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={alt ?? ""} loading="lazy" />
+          {alt && <figcaption>{alt}</figcaption>}
+        </figure>
+      )
     },
-  ]
+  }
 
   return (
     <>
       <ReadingProgress />
 
-      <section className="relative z-10 min-h-[calc(100vh-80px)] px-4 sm:px-6 pt-8 pb-24">
+      {/* Disclaimer — full-width amber bar */}
+      <DisclaimerBanner />
+
+      <section
+        className="relative z-10 min-h-[calc(100vh-80px)] px-4 sm:px-6 pt-8 pb-24"
+        style={{ background: "hsl(245, 30%, 98%)" }}
+      >
         <div className="max-w-6xl mx-auto">
 
           {/* Back link */}
@@ -332,10 +581,9 @@ export default function PostDetail({ post }: { post: Post }) {
 
           {/* ── Hero Banner ─────────────────────────────────────────────── */}
           <div
-            className="rounded-2xl p-5 md:p-7 mb-4"
+            className="rounded-2xl p-5 md:p-8 mb-6"
             style={{
-              background:
-                "linear-gradient(160deg, hsl(250, 60%, 82%), hsl(240, 55%, 55%), hsl(240, 50%, 40%))",
+              background: "linear-gradient(160deg, hsl(250, 60%, 82%), hsl(240, 55%, 55%), hsl(240, 50%, 40%))",
             }}
           >
             <span
@@ -376,10 +624,10 @@ export default function PostDetail({ post }: { post: Post }) {
                   fontFamily: "var(--font-space-grotesk), sans-serif",
                 }}
               >
-                SD
+                AG
               </div>
               <div style={{ fontFamily: "var(--font-montserrat), sans-serif" }}>
-                <p className="text-xs font-medium text-white leading-tight">StatDoctor Editorial</p>
+                <p className="text-xs font-medium text-white leading-tight">Dr. Anu Ganugapati</p>
                 <p
                   className="text-[10px] text-white/70 tracking-widest uppercase mt-0.5"
                   style={{ fontFamily: "var(--font-space-grotesk), sans-serif" }}
@@ -390,58 +638,32 @@ export default function PostDetail({ post }: { post: Post }) {
             </div>
           </div>
 
-          {/* ── Hero Image ──────────────────────────────────────────────── */}
-          {post.image_url && (
-            <div className="mb-4">
+          {/* ── Hero Image — only shown when a source-attributed image is available ── */}
+          {heroSource?.imageUrl && (
+            <div className="article-hero-img-wrap mb-8">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={post.image_url}
-                alt={post.og_image_alt}
-                className="w-full rounded-2xl block"
-                style={{ maxHeight: "420px", objectFit: "cover", objectPosition: "center" }}
+                src={heroSource.imageUrl}
+                alt={heroSource.title}
+                className="article-hero-img"
+                loading="eager"
               />
-              {post.image_credit && (
-                <p
-                  className="text-[11px] font-light mt-2 px-1 italic"
-                  style={{ color: "hsl(240, 20%, 46%)" }}
-                >
-                  {post.image_credit}
-                </p>
-              )}
+              <p className="article-hero-img-caption">
+                <strong>Source:</strong>{" "}
+                <a href={heroSource.url} target="_blank" rel="noopener noreferrer">
+                  {heroSource.publisher}
+                </a>
+                {" — "}
+                {heroSource.title}
+              </p>
             </div>
           )}
 
-          {/* ── Stat Strip ──────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {statStrip.map(({ value, label }) => {
-              const isIndigo = label === "read time" || label === "sources cited"
-              return (
-                <div key={label} className="post-stat-card rounded-2xl p-6 text-center">
-                  <p
-                    className="text-3xl md:text-4xl font-bold mb-1"
-                    style={{
-                      color: "hsl(240, 50%, 20%)",
-                      fontFamily: "var(--font-varela-round), sans-serif",
-                    }}
-                  >
-                    {value}
-                  </p>
-                  <p
-                    className="text-xs font-semibold tracking-widest uppercase"
-                    style={{
-                      color: isIndigo ? "hsl(240, 55%, 55%)" : "hsl(240, 20%, 46%)",
-                      fontFamily: "var(--font-space-grotesk), sans-serif",
-                    }}
-                  >
-                    {label}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
+          {/* ── Who This Is For ─────────────────────────────────────────── */}
+          <WhoThisIsFor />
 
           {/* ── Main Grid ───────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-8">
 
             {/* Content panel */}
             <div
@@ -449,18 +671,42 @@ export default function PostDetail({ post }: { post: Post }) {
               style={{
                 background: "#ffffff",
                 border: "1px solid hsl(245, 25%, 90%)",
-                boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.08)",
+                boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.06)",
               }}
             >
-              {/* Main article content (before FAQ) */}
-              <article className="post-prose">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={mdComponents as any}
-                >
-                  {before}
-                </ReactMarkdown>
-              </article>
+              {contentSections.map((section, i) => (
+                <React.Fragment key={i}>
+                  <article className="post-prose">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={mdComponents as any}
+                    >
+                      {section}
+                    </ReactMarkdown>
+                  </article>
+
+                  {/* Inject source image after section 0 and section 2 */}
+                  {(i === 0 || i === 2) && (() => {
+                    const img = inlineImgs[i === 0 ? 0 : 1]
+                    if (!img) return null
+                    return (
+                      <figure className="post-source-figure">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.src} alt={img.caption} loading="lazy" />
+                        <figcaption>
+                          {img.caption && <span>{img.caption}</span>}
+                          <span style={{ marginLeft: img.caption ? "0.5rem" : 0 }}>
+                            <strong>Source:</strong>{" "}
+                            <a href={img.url} target="_blank" rel="noopener noreferrer">
+                              {img.publisher}
+                            </a>
+                          </span>
+                        </figcaption>
+                      </figure>
+                    )
+                  })()}
+                </React.Fragment>
+              ))}
 
               {/* FAQ Accordion */}
               {faqItems.length > 0 && (
@@ -482,6 +728,7 @@ export default function PostDetail({ post }: { post: Post }) {
               {/* Sources section */}
               {sources && (
                 <article
+                  id="sources"
                   className="post-prose mt-10 pt-8"
                   style={{ borderTop: "1px solid hsl(245, 25%, 90%)" }}
                 >
@@ -493,155 +740,47 @@ export default function PostDetail({ post }: { post: Post }) {
                   </ReactMarkdown>
                 </article>
               )}
+
+              {/* Source image gallery — embedded coverage */}
+              <SourceImageGallery sources={sourceImages} />
+
+              {/* Social share */}
+              <SocialShare title={post.title} />
             </div>
 
-            {/* ── Sticky Sidebar ─────────────────────────────────────────── */}
+            {/* ── Sticky Sidebar — TOC only ───────────────────────────── */}
             <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
-
-              {/* In This Guide */}
               <TocSidebar items={tocItems} />
-
-              {/* Quick Stat */}
-              <div
-                className="rounded-2xl p-6 text-center"
-                style={{
-                  background: "hsl(240, 50%, 20%)",
-                  color: "#ffffff",
-                }}
-              >
-                <p
-                  className="text-xs font-semibold tracking-widest uppercase mb-2"
-                  style={{
-                    color: "hsl(68, 85%, 55%)",
-                    fontFamily: "var(--font-space-grotesk), sans-serif",
-                  }}
-                >
-                  Quick Stat
-                </p>
-                <p
-                  className="text-4xl font-bold mb-1"
-                  style={{ fontFamily: "var(--font-varela-round), sans-serif" }}
-                >
-                  {post.sources.length}
-                </p>
-                <p
-                  className="text-sm font-light leading-snug"
-                  style={{
-                    color: "rgba(255,255,255,0.8)",
-                    fontFamily: "var(--font-montserrat), sans-serif",
-                  }}
-                >
-                  sources verified for this article
-                </p>
-              </div>
-
-              {/* Focus keyword */}
-              <MetaCard title="Focus keyword">
-                <p className="text-sm font-medium">{post.focus_keyword}</p>
-              </MetaCard>
-
-              {/* Meta title */}
-              <MetaCard title="Meta title">
-                <p className="text-sm font-light leading-relaxed">{post.meta_title}</p>
-                <p className="text-[10px] mt-2" style={{ color: "hsl(240, 20%, 46%)" }}>
-                  {post.meta_title.length} chars
-                </p>
-              </MetaCard>
-
-              {/* Keywords */}
-              <MetaCard title="Keywords">
-                <div className="flex flex-wrap gap-1.5">
-                  {post.target_keywords.map((kw) => (
-                    <span
-                      key={kw}
-                      className="text-[11px] px-2 py-0.5 rounded-md font-medium"
-                      style={{
-                        background: "hsl(245, 25%, 93%)",
-                        color: "hsl(240, 50%, 20%)",
-                        border: "1px solid hsl(245, 25%, 90%)",
-                      }}
-                    >
-                      {kw}
-                    </span>
-                  ))}
-                </div>
-              </MetaCard>
-
-              {/* AHPRA */}
-              <MetaCard title="AHPRA compliance">
-                <div className="flex items-center gap-2 mb-2">
-                  <span
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ background: post.ahpra_passed ? "hsl(68, 70%, 40%)" : "#f59e0b" }}
-                  />
-                  <span className="text-sm font-medium">
-                    {post.ahpra_passed ? "Passed" : "Review needed"}
-                  </span>
-                </div>
-                {post.ahpra_flags.length > 0 && (
-                  <ul className="flex flex-col gap-1.5 mt-2">
-                    {post.ahpra_flags.map((flag, i) => (
-                      <li
-                        key={i}
-                        className="text-[11px] font-light leading-relaxed"
-                        style={{ color: "hsl(240, 20%, 46%)" }}
-                      >
-                        <span style={{ color: "hsl(240, 20%, 46%)" }}>
-                          {flag.requires_human_review ? "⚠ " : "✓ "}
-                        </span>
-                        {flag.fix_applied}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </MetaCard>
-
-              {/* Slug */}
-              <MetaCard title="Slug">
-                <code
-                  className="text-xs font-mono break-all"
-                  style={{ color: "hsl(240, 55%, 55%)" }}
-                >
-                  /blog/{post.slug}
-                </code>
-              </MetaCard>
             </aside>
           </div>
+
+          {/* ── Author Bio ──────────────────────────────────────────────── */}
+          <AuthorBio />
+
+          {/* ── Join CTA ────────────────────────────────────────────────── */}
+          <JoinCTA />
+
+          {/* ── Related Articles ────────────────────────────────────────── */}
+          <RelatedArticles posts={relatedPosts} />
+
+          {/* ── Bottom Nav ──────────────────────────────────────────────── */}
+          <nav className="article-bottom-nav">
+            <Link href="/dashboard">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to all posts
+            </Link>
+            <a href="#top">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7 7 7M12 3v18" />
+              </svg>
+              Back to top
+            </a>
+          </nav>
+
         </div>
       </section>
     </>
-  )
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function MetaCard({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <div
-      className="rounded-2xl p-5 transition-all duration-300"
-      style={{
-        background: "#ffffff",
-        border: "1px solid hsl(245, 25%, 90%)",
-        boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.08)",
-        fontFamily: "var(--font-montserrat), sans-serif",
-      }}
-    >
-      <h3
-        className="text-xs font-semibold tracking-widest uppercase mb-3"
-        style={{
-          color: "hsl(240, 55%, 55%)",
-          fontFamily: "var(--font-space-grotesk), sans-serif",
-        }}
-      >
-        {title}
-      </h3>
-      <div style={{ color: "hsl(240, 50%, 20%)" }}>{children}</div>
-    </div>
   )
 }

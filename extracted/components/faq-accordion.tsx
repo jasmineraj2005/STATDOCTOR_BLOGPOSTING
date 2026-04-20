@@ -62,7 +62,7 @@ export default function FaqAccordion({ items }: { items: FaqItem[] }) {
               maxHeight: open === i ? "600px" : "0",
               opacity: open === i ? 1 : 0,
               overflow: "hidden",
-              transition: "max-height 0.25s ease, opacity 0.25s ease",
+              transition: "max-height 0.15s ease, opacity 0.12s ease",
             }}
           >
             <div
