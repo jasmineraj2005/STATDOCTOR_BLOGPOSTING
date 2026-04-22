@@ -662,12 +662,55 @@ export default function PostDetail({
           {/* ── Who This Is For ─────────────────────────────────────────── */}
           <WhoThisIsFor />
 
+          {/* ── Mobile TOC — shown above content on small/medium screens ── */}
+          {tocItems.length > 0 && (
+            <div className="block lg:hidden mb-6">
+              <div
+                className="rounded-2xl p-5"
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid hsl(245, 25%, 90%)",
+                  boxShadow: "0 4px 24px -4px hsl(240 50% 20% / 0.08)",
+                }}
+              >
+                <p
+                  className="text-xs font-semibold tracking-widest uppercase mb-3"
+                  style={{
+                    color: "hsl(240, 55%, 55%)",
+                    fontFamily: "var(--font-space-grotesk), sans-serif",
+                  }}
+                >
+                  In This Guide
+                </p>
+                <nav className="flex flex-col space-y-0.5">
+                  {tocItems.map((item) => (
+                    <a
+                      key={item.id}
+                      href={`#${item.id}`}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }}
+                      className="block text-sm py-1.5 leading-snug"
+                      style={{
+                        color: "hsl(240, 20%, 46%)",
+                        fontFamily: "var(--font-montserrat), sans-serif",
+                      }}
+                    >
+                      {item.text}
+                    </a>
+                  ))}
+                </nav>
+              </div>
+            </div>
+          )}
+
           {/* ── Main Grid ───────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-8">
 
             {/* Content panel */}
             <div
-              className="rounded-2xl p-8 md:p-10 min-w-0"
+              className="rounded-2xl p-5 sm:p-8 md:p-10 min-w-0"
               style={{
                 background: "#ffffff",
                 border: "1px solid hsl(245, 25%, 90%)",
@@ -748,8 +791,8 @@ export default function PostDetail({
               <SocialShare title={post.title} />
             </div>
 
-            {/* ── Sticky Sidebar — TOC only ───────────────────────────── */}
-            <aside className="flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
+            {/* ── Sticky Sidebar — TOC only (desktop only) ────────────── */}
+            <aside className="hidden lg:flex flex-col gap-4 lg:sticky lg:top-24 lg:self-start">
               <TocSidebar items={tocItems} />
             </aside>
           </div>
