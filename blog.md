@@ -13,9 +13,8 @@ This doc owns *what we publish and why* plus the **handover state of the project
 - ✅ Two-repo pipeline is built and shipping articles end-to-end
 - ✅ 4 articles live at `/blog`, each with hero / table / callouts / source gallery
 - ✅ Vercel cron scrapes 9 competitor blogs Mon/Wed/Fri
-- ✅ **Phase 0 done (2026-05-12)** — factory repo has its own Next.js scaffold; admin shell lives at the root; `/admin/competitor-topics` still renders unchanged
-- ✅ **Phase 1 done (2026-05-12)** — `FinalPost` extended with `status / content_type / keywords / twitter_card / dateModified / rejection_history`; SEO agent emits per-pillar title cadence + supplementary keywords + twitter card; website renders `MedicalScholarlyArticle` + `BreadcrumbList` + `FAQPage`; layout flipped to `lang="en-AU"` with geo + GSC/Bing verification meta
-- 🔨 **Phase 2 in progress** — `/admin/posts` approval queue (loader, validators, edit panel, approve=publish handoff). Unblocks Anu's Sunday review cadence.
+- ✅ **Phase 1 done (2026-05-12)** — `FinalPost` extended with `status / content_type / keywords / twitter_card / dateModified / rejection_history`; SEO agent emits per-pillar title cadence + supplementary keywords + twitter card. Backend commit `c6aa02d`. Website-side JSON-LD upgrades were reverted per the two-repo rule and are queued for a separate `~/website/` session.
+- ✅ **Phase 2 done locally (2026-05-12)** — `/admin/posts` approval queue lives inside `extracted/` (the Vercel deploy root). Loader → 8 validators (AHPRA/banned/anchor/callouts/table/schema/words/sources) → edit panel → approve = publish (fs cp local / GitHub API prod) → structured rejection taxonomy with 2-strike drop. Commit `26b9e9b`. Pre-existing competitor-topics admin + cron also relocated into `extracted/` (they were dead weight at the repo root). **Not pushed yet** — needs your green light, then Vercel will rebuild `extracted/`.
 - ⚠️ Word counts still under spec (988-1125 vs 1500/1200) — Phase 6
 - ⚠️ Domain `statdoctor.app` (2.5 years old, has existing authority) **not attached yet** — Phase 5
 - ⚠️ Approval workflow for CEO not yet live — Phase 2 (in flight). Anu has committed to a 20–30 min Sunday batch-review window.

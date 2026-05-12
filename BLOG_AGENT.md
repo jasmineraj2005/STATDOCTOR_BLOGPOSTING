@@ -235,26 +235,26 @@ GUARDIAN_API_KEY=…       # NEW: for OG-image hydration on Guardian sources
 
 ## Implementation status
 
-Last updated: 2026-05-12 (Phase 0 + 1 of current plan complete).
+Last updated: 2026-05-12 (Phase 1 + 2 of current plan complete and committed; not pushed yet).
+
+**Important repo rule** — see [[repo-separation]] in memory: the Next.js dashboard lives **inside `extracted/`** (the Vercel deploy root). All new admin work goes there, not at the repo root. The client-facing site `~/website/` is a separate repo and off-limits unless explicitly named.
 
 | Task | Status |
 |---|---|
-| **Phase 0** — Next.js scaffold (`package.json`, `tsconfig`, `next.config`, `tailwind.config`, `vercel.json`, root layout + globals.css + AdminShell) | DONE |
-| **Phase 1** — Backend: `FinalPost` schema + `ContentType` enum + `keywords` + `twitter_card` + `dateModified` + `status` + `rejection_history` + `COMPANY` pillar | DONE |
-| **Phase 1** — `agents/seo.py` per-pillar title cadence + `keywords` + `twitter_card` emission | DONE |
-| **Phase 1** — `pipeline.py` writes `status="pending_review"`, derives `content_type` from pillar | DONE |
-| **Phase 1** — Website `[slug]/page.tsx`: `MedicalScholarlyArticle` + `BreadcrumbList` + `FAQPage` JSON-LD; `dateModified` in OG meta | DONE |
-| **Phase 1** — Website `app/layout.tsx`: `lang="en-AU"`, geo meta, GSC + Bing verification env-driven | DONE |
-| **Phase 2** — `/admin/posts` approval queue (loader, validators, edit, approve, reject, publish handoff) | TODO |
-| **Phase 3** — Website `app/about/dr-anu-ganugapati/` with `Person` JSON-LD + AHPRA `sameAs` | TODO |
-| **Phase 4** — `/admin/seo` dashboard (GSC + Bing + AEO log, Postgres-backed) | TODO |
+| **Phase 1** — Backend: `FinalPost` + `ContentType` enum + `keywords` + `twitter_card` + `dateModified` + `status` + `rejection_history` + `COMPANY` pillar | DONE (commit `c6aa02d`) |
+| **Phase 1** — `agents/seo.py` per-pillar title cadence + `keywords` + `twitter_card` emission | DONE (commit `c6aa02d`) |
+| **Phase 1** — `pipeline.py` writes `status="pending_review"`, derives `content_type` from pillar | DONE (commit `c6aa02d`) |
+| **Phase 2** — `/admin/posts` approval queue inside `extracted/` (loader, 8-check validator panel, edit, approve = publish via fs/GH API, structured rejection taxonomy) | DONE (commit `26b9e9b`) |
+| **Phase 2** — `lib/admin/{loader,validators,publish,audit,auth,types,competitor-sources}.ts` | DONE (commit `26b9e9b`) |
+| **Phase 2** — Competitor-topics admin + cron moved INTO `extracted/` (they were sitting at the repo root, invisible to Vercel) | DONE (commit `26b9e9b`) |
+| **Phase 2** — `extracted/package.json` deps: `@vercel/kv`, `openai`, `cheerio` | DONE (commit `26b9e9b`) |
+| Local smoke tests: `/admin/posts`, `/admin/posts/{slug}`, `/admin/competitor-topics` → 200; `POST /api/posts/{slug}/approve` re-validates and refuses on fail | DONE |
+| **Phase 3** — Website `app/about/dr-anu-ganugapati/` with `Person` JSON-LD + AHPRA `sameAs` | TODO (separate website repo) |
+| **Phase 4** — `/admin/seo` dashboard in `extracted/` (GSC + Bing + AEO log, Postgres-backed) | TODO |
 | **Phase 5** — Domain attach audit + GSC/Bing verification + sitemap submission | TODO |
 | **Phase 6** — Word count fix via fresh full-Researcher runs | TODO |
-| `lib/blog/posts.ts`, `posts-server.ts`, `media.ts` | DONE (pre-existing) |
-| `components/blog/*` lifted + restyled | DONE (pre-existing) |
-| `app/blog/page.tsx` rewired to real posts | DONE (pre-existing) |
-| `app/sitemap.ts`, `app/robots.ts` | DONE (pre-existing) |
-| `sources/` adapter package (pluggable news) | DONE (5 adapters: Guardian/ABC/NewsAPI/GoogleNewsRSS/Authoritative) per `blog.md` |
+| Push `main` → origin (3 commits ahead) and verify Vercel build of `extracted/` | TODO — user approval gated |
+| `sources/` adapter package (pluggable news) | DONE per `blog.md` (5 adapters live) |
 | `validation/urls.py` HEAD-check + whitelist | TODO (carry-over from previous plan) |
 
 ---
