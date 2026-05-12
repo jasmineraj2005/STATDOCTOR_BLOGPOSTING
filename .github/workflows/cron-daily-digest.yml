@@ -1,0 +1,23 @@
+name: Cron — daily-digest
+
+# Sends the editorial digest email (Resend) every morning.
+# Acknowledges alerts as it surfaces them so tomorrow's digest doesn't repeat.
+
+on:
+  schedule:
+    - cron: "0 22 * * *" # daily 22:00 UTC (~08:00 Sydney AEST next morning)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hit /api/cron/daily-digest
+        run: |
+          curl --fail-with-body \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            ${{ secrets.CRON_BASE_URL }}/api/cron/daily-digest

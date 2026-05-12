@@ -1,0 +1,23 @@
+name: Cron — competitor-audit
+
+# Scrape 9 competitor blog indexes, cluster titles into topic proposals.
+# Mon / Wed / Fri 14:00 UTC (matches blog.md operational cadence).
+
+on:
+  schedule:
+    - cron: "0 14 * * 1,3,5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hit /api/cron/competitor-audit
+        run: |
+          curl --fail-with-body \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            ${{ secrets.CRON_BASE_URL }}/api/cron/competitor-audit
