@@ -33,3 +33,16 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
 CREATE INDEX IF NOT EXISTS audit_ts_idx ON audit_events (ts DESC);
 CREATE INDEX IF NOT EXISTS audit_slug_idx ON audit_events (slug, ts DESC);
+
+-- Alerts: append-only log of anything an operator needs to see in the daily digest.
+-- Cron failures, auto-publish blocks, publish handoff failures, GSC fetch errors.
+CREATE TABLE IF NOT EXISTS alerts (
+  id BIGSERIAL PRIMARY KEY,
+  ts TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  kind TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  acknowledged_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS alerts_unack_idx ON alerts (ts DESC) WHERE acknowledged_at IS NULL;
+CREATE INDEX IF NOT EXISTS alerts_kind_idx ON alerts (kind, ts DESC);
