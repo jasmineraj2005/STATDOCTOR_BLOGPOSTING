@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { isAuthorised } from "@/lib/admin/auth";
-import { getPostFileBySlug, writePostFile } from "@/lib/admin/loader";
-import { logAuditEvent } from "@/lib/admin/audit";
+import { getPostBySlug, upsertPost, logAudit } from "@/lib/admin/store";
 import { REJECTION_LABELS, type RejectionCode } from "@/lib/admin/types";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +18,7 @@ export async function POST(
   }
 
   const { slug } = await params;
-  const file = await getPostFileBySlug(slug);
+  const file = await getPostBySlug(slug);
   if (!file) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
@@ -44,11 +43,11 @@ export async function POST(
     rejection_history: history,
     last_reviewed_at: now,
   };
-  await writePostFile(file, updated);
+  await upsertPost(file, updated);
 
-  await logAuditEvent({
+  await logAudit({
     ts: now,
-    slug: slug,
+    slug,
     action: "reject",
     reason_code: code,
     reason_text: text,
@@ -56,11 +55,6 @@ export async function POST(
       ? "Final rejection — topic dropped, no further regen."
       : "Rejected — eligible for one regen attempt.",
   });
-
-  // Regen is intentionally out-of-band — kicking off Python from a Next.js
-  // handler ties the request to a subprocess we can't reliably reap. The user
-  // re-runs `python main.py --regen <slug>` (or a cron picks rejected posts
-  // up). The rejection text is read by the Writer from rejection_history.
 
   redirect("/admin/posts");
 }

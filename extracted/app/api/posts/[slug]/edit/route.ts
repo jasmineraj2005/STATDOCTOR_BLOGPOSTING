@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { isAuthorised } from "@/lib/admin/auth";
-import { getPostFileBySlug, writePostFile } from "@/lib/admin/loader";
-import { logAuditEvent } from "@/lib/admin/audit";
+import { getPostBySlug, upsertPost, logAudit } from "@/lib/admin/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,7 +23,7 @@ export async function POST(
   }
 
   const { slug } = await params;
-  const file = await getPostFileBySlug(slug);
+  const file = await getPostBySlug(slug);
   if (!file) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
@@ -53,11 +52,11 @@ export async function POST(
     // Editing reverts a rejected post back to pending_review.
     status: "pending_review" as const,
   };
-  await writePostFile(file, updated);
+  await upsertPost(file, updated);
 
-  await logAuditEvent({
+  await logAudit({
     ts: new Date().toISOString(),
-    slug: slug,
+    slug,
     action: "edit",
     detail: `meta_title len=${meta_title.length}, words=${word_count}, keywords=${keywords.length}`,
   });

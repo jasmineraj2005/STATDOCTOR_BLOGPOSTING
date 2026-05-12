@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { isAuthorised } from "@/lib/admin/auth";
-import { getAllPostFiles, getPendingPostFiles } from "@/lib/admin/loader";
+import { getAllPosts, getPendingPosts } from "@/lib/admin/store";
 import { runValidators, isApprovable } from "@/lib/admin/validators";
 import {
   CONTENT_TYPE_LABELS,
@@ -16,8 +16,8 @@ export default async function PostsQueue() {
   if (!(await isAuthorised())) redirect("/admin/login");
 
   const [pending, all] = await Promise.all([
-    getPendingPostFiles(),
-    getAllPostFiles(),
+    getPendingPosts(),
+    getAllPosts(),
   ]);
   const published = all.filter((f) => f.post.status === "published");
   const rejected = all.filter((f) => f.post.status === "rejected");

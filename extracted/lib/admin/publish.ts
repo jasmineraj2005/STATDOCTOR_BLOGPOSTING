@@ -17,23 +17,29 @@ function safeFilename(file: PostFile): string {
   return file.filename;
 }
 
+/** Serialise the post for committing/copying — never re-reads from disk so this
+ *  works in DB-only mode (no JSON files present in the Vercel container). */
+function serialise(file: PostFile): string {
+  return JSON.stringify(file.post, null, 2);
+}
+
 async function publishToFs(file: PostFile, targetDir: string): Promise<PublishResult> {
   const dst = path.join(targetDir, safeFilename(file));
   try {
     await fs.mkdir(targetDir, { recursive: true });
-    await fs.copyFile(file.filepath, dst);
+    await fs.writeFile(dst, serialise(file));
     return {
       mode: "local-fs",
       ok: true,
       destination: dst,
-      detail: `Copied to ${dst}.`,
+      detail: `Wrote ${dst}.`,
     };
   } catch (e) {
     return {
       mode: "local-fs",
       ok: false,
       destination: dst,
-      detail: `fs copy failed: ${String(e)}`,
+      detail: `fs write failed: ${String(e)}`,
     };
   }
 }
@@ -65,7 +71,7 @@ async function publishToGitHub(file: PostFile): Promise<PublishResult> {
     sha = meta.sha;
   }
 
-  const content = await fs.readFile(file.filepath, "utf-8");
+  const content = serialise(file);
   const body = {
     message: `Publish blog post: ${file.post.slug}`,
     content: Buffer.from(content, "utf-8").toString("base64"),

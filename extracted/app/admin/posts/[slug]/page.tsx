@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { isAuthorised } from "@/lib/admin/auth";
-import { getPostFileBySlug } from "@/lib/admin/loader";
+import { getPostBySlug } from "@/lib/admin/store";
 import { runValidators, isApprovable, type ValidationResult } from "@/lib/admin/validators";
 import {
   CONTENT_TYPE_LABELS,
@@ -21,7 +21,7 @@ export default async function PostEditPage({
   if (!(await isAuthorised())) redirect("/admin/login");
 
   const { slug } = await params;
-  const file = await getPostFileBySlug(slug);
+  const file = await getPostBySlug(slug);
   if (!file) notFound();
 
   const { post } = file;

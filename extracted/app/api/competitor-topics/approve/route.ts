@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
-import { cookies } from "next/headers";
+import { isAuthorised } from "@/lib/admin/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function isAuthorised(): boolean {
-  const adminToken = process.env.ADMIN_TOKEN;
-  if (!adminToken) return true;
-  const provided = cookies().get("admin_token")?.value;
-  return provided === adminToken;
-}
-
 export async function POST(req: Request) {
-  if (!isAuthorised()) {
+  if (!(await isAuthorised())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

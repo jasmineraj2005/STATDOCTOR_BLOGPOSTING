@@ -90,6 +90,7 @@ def run_pipeline() -> FinalPost:
     )
 
     _save_outputs(final)
+    _push_to_dashboard(final)
     _summary(final)
     return final
 
@@ -141,6 +142,46 @@ dateModified: "{post.dateModified.isoformat()}"
 
     print(f"\n  Saved → {json_path.name}")
     print(f"  Saved → {md_path.name}")
+
+
+def _push_to_dashboard(post: FinalPost) -> None:
+    """If INGEST_URL + INGEST_TOKEN are set, POST the FinalPost JSON to the
+    Vercel-deployed dashboard so it shows up in /admin/posts. Silently no-ops
+    in local-only setups."""
+    import os
+    import urllib.request
+    import urllib.error
+
+    url = os.environ.get("INGEST_URL")
+    token = os.environ.get("INGEST_TOKEN")
+    if not url or not token:
+        return
+
+    ts = post.generated_at.strftime("%Y%m%d_%H%M%S")
+    safe_slug = post.slug[:50]
+    filename = f"{ts}_{safe_slug}.json"
+    payload = {
+        "filename": filename,
+        "post": post.model_dump(mode="json"),
+    }
+    body = json.dumps(payload, default=str).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            status = resp.getcode()
+            print(f"  Pushed to dashboard → HTTP {status}")
+    except urllib.error.HTTPError as e:
+        print(f"  ⚠  Dashboard push failed: HTTP {e.code} {e.reason}")
+    except Exception as e:
+        print(f"  ⚠  Dashboard push errored: {e}")
 
 
 def _header() -> None:
