@@ -106,36 +106,7 @@ export const REJECTION_LABELS: Record<RejectionCode, string> = {
   other: "Other",
 };
 
-/** Government / peer-reviewed authoritative domains, used by the source check. */
-export const AUTHORITATIVE_DOMAINS = [
-  "aihw.gov.au",
-  "abs.gov.au",
-  "health.gov.au",
-  "racgp.org.au",
-  "ama.com.au",
-  "ahpra.gov.au",
-  "medicalboard.gov.au",
-  "rcna.org.nz",
-  "health.govt.nz",
-  "rnzcgp.org.nz",
-  "who.int",
-  "ncbi.nlm.nih.gov",
-  "nature.com",
-  "thelancet.com",
-  "mja.com.au",
-  "bmj.com",
-];
-
-/** Per-content_type word-count floors. Soft warning, not a hard block. */
-export const WORD_FLOORS: Record<ContentType, number> = {
-  news: 1500,
-  guide: 1500,
-  company: 1000,
-};
-
-/** Per-content_type callout-count floors. */
-export const CALLOUT_FLOORS: Record<ContentType, number> = {
-  news: 3,
-  guide: 4,
-  company: 3,
-};
+// Validator config (authoritative domains, word floors, callout floors,
+// banned phrases, etc.) is read at runtime from extracted/lib/admin/validators.json
+// — the single source of truth shared with backend/agents/ahpra.py. Don't add
+// duplicate constants here; edit the JSON instead.

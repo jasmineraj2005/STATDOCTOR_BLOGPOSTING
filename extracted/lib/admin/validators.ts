@@ -1,9 +1,5 @@
-import {
-  AUTHORITATIVE_DOMAINS,
-  CALLOUT_FLOORS,
-  WORD_FLOORS,
-  type Post,
-} from "./types";
+import type { ContentType, Post } from "./types";
+import validatorsConfig from "./validators.json";
 
 export type ValidationStatus = "pass" | "fail" | "warn";
 
@@ -22,38 +18,38 @@ export type ValidationResult = {
   detail: string;
 };
 
-// Mirror of backend/agents/ahpra.py:_FORBIDDEN — keep in sync.
-const FORBIDDEN: { pattern: RegExp; reason: string }[] = [
-  { pattern: /\bbest doctor\b/i, reason: "superlative 'best doctor' — AHPRA s.133(1)(b)" },
-  { pattern: /\bnumber[\s-]?one\b/i, reason: "superlative 'number one'" },
-  { pattern: /\b#\s?1\b/i, reason: "superlative '#1'" },
-  { pattern: /\bleading specialist\b/i, reason: "comparative superlative" },
-  { pattern: /\bmost experienced\b/i, reason: "comparative superlative" },
-  { pattern: /\bworld[\s-]?class\b/i, reason: "superlative 'world-class'" },
-  {
-    pattern: /\baustralia'?s? (best|leading|top|premier)\b/i,
-    reason: "superlative 'Australia's best/leading/top/premier'",
-  },
-  {
-    pattern: /\bguaranteed? (results?|outcomes?|success)\b/i,
-    reason: "outcome guarantee — AHPRA prohibited",
-  },
-  { pattern: /\bcure[sd]?\b/i, reason: "'cure' — requires evidence; flag for review" },
-  { pattern: /\btestimonial/i, reason: "patient testimonial — AHPRA restricted" },
-  {
-    pattern: /\bendorsement from (a |my )?(patient|client)\b/i,
-    reason: "patient endorsement — AHPRA restricted",
-  },
-];
+// ── Config (single source of truth — shared with backend/agents/ahpra.py) ─────
 
-// Editorially-banned phrases per blog.md "Voice rules".
-const EDITORIALLY_BANNED: RegExp[] = [
-  /\bcomprehensive\b/i,
-  /\bdelve\b/i,
-  /\btoday\b/i,
-  /\bgroundbreaking\b/i,
-  /\brobust\b/i,
-];
+type ValidatorsConfig = {
+  ahpra_banned: { pattern: string; reason: string }[];
+  editorially_banned: { pattern: string; reason: string }[];
+  bad_anchor_patterns: string[];
+  callout_floors: Record<ContentType, number>;
+  word_floors: Record<ContentType, number>;
+  pay_disclaimer_triggers: string[];
+  authoritative_domains: string[];
+};
+
+const cfg = validatorsConfig as unknown as ValidatorsConfig;
+
+const FORBIDDEN: { pattern: RegExp; reason: string }[] = cfg.ahpra_banned.map(
+  (entry) => ({ pattern: new RegExp(entry.pattern, "i"), reason: entry.reason }),
+);
+
+const EDITORIALLY_BANNED: { pattern: RegExp; reason: string }[] =
+  cfg.editorially_banned.map((entry) => ({
+    pattern: new RegExp(entry.pattern, "i"),
+    reason: entry.reason,
+  }));
+
+const BAD_ANCHOR_RE = new RegExp(
+  `\\[(${cfg.bad_anchor_patterns
+    .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|")})\\]\\(`,
+  "gi",
+);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function hostnameOf(url: string): string {
   try {
@@ -64,7 +60,9 @@ function hostnameOf(url: string): string {
 }
 
 function isAuthoritative(host: string): boolean {
-  return AUTHORITATIVE_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
+  return cfg.authoritative_domains.some(
+    (d) => host === d || host.endsWith(`.${d}`),
+  );
 }
 
 function countCallouts(md: string): number {
@@ -74,21 +72,23 @@ function countCallouts(md: string): number {
 }
 
 function hasMarkdownTable(md: string): boolean {
-  // Heuristic: a header row `| ... | ... |` followed by `| --- | --- |`.
-  return /\n\|[^\n]+\|\s*\n\|[\s:-]+\|[\s:-|]+\|/.test(md);
+  // A header row `| ... | ... |` immediately followed by a delimiter row that
+  // contains only `|`, `-`, `:`, and whitespace. Multiline `m` flag so `^/$`
+  // anchor per line.
+  return /^\|.+\|\s*$\n^\|[\s:|\-]+\|\s*$/m.test(md);
 }
 
 function findSourceStyleAnchors(md: string): string[] {
-  // Look for `[source](...)`, `[link](...)`, `[click here](...)` — all bad anchor text.
-  const re = /\[(source|link|click here|here|read more)\]\(/gi;
-  const hits = md.match(re);
+  const hits = md.match(BAD_ANCHOR_RE);
   return hits ? Array.from(new Set(hits.map((h) => h.toLowerCase()))) : [];
 }
+
+// ── Public API ────────────────────────────────────────────────────────────────
 
 export function runValidators(post: Post): ValidationResult[] {
   const results: ValidationResult[] = [];
 
-  // ── AHPRA ──────────────────────────────────────────────────────────────────
+  // AHPRA scan flags from the Python agent.
   const reviewFlags = post.ahpra_flags.filter((f) => f.requires_human_review);
   results.push({
     check: "ahpra",
@@ -102,16 +102,14 @@ export function runValidators(post: Post): ValidationResult[] {
             .join(", ")}.`,
   });
 
-  // ── Banned phrases (live regex over current markdown) ─────────────────────
+  // Live regex over current markdown — catches edits that re-introduced banned terms.
   const bannedHits: string[] = [];
   for (const { pattern, reason } of FORBIDDEN) {
     if (pattern.test(post.content_markdown)) bannedHits.push(reason);
   }
   const editorialHits: string[] = [];
-  for (const re of EDITORIALLY_BANNED) {
-    if (re.test(post.content_markdown)) {
-      editorialHits.push(re.source.replace(/\\b/g, "").replace(/[/g\\i]/g, ""));
-    }
+  for (const { pattern, reason } of EDITORIALLY_BANNED) {
+    if (pattern.test(post.content_markdown)) editorialHits.push(reason);
   }
   results.push({
     check: "banned_phrases",
@@ -125,7 +123,6 @@ export function runValidators(post: Post): ValidationResult[] {
           : "Clean.",
   });
 
-  // ── Anchor text: no `[source](…)` style ────────────────────────────────────
   const badAnchors = findSourceStyleAnchors(post.content_markdown);
   results.push({
     check: "anchor_text",
@@ -137,9 +134,8 @@ export function runValidators(post: Post): ValidationResult[] {
         : "Anchors use entity names.",
   });
 
-  // ── Callout quota ──────────────────────────────────────────────────────────
   const callouts = countCallouts(post.content_markdown);
-  const calloutFloor = CALLOUT_FLOORS[post.content_type] ?? 3;
+  const calloutFloor = cfg.callout_floors[post.content_type] ?? 3;
   results.push({
     check: "callout_quota",
     label: "Callout quota",
@@ -147,7 +143,6 @@ export function runValidators(post: Post): ValidationResult[] {
     detail: `${callouts} callouts (floor for ${post.content_type}: ${calloutFloor}).`,
   });
 
-  // ── Comparison table present ───────────────────────────────────────────────
   const hasTable = hasMarkdownTable(post.content_markdown);
   results.push({
     check: "comparison_table",
@@ -158,7 +153,6 @@ export function runValidators(post: Post): ValidationResult[] {
       : "No markdown table found — recommended for guides.",
   });
 
-  // ── Schema shape check ────────────────────────────────────────────────────
   const faq = post.faq_json_ld as { "@type"?: string; mainEntity?: unknown[] };
   const faqOk =
     faq?.["@type"] === "FAQPage" &&
@@ -173,8 +167,7 @@ export function runValidators(post: Post): ValidationResult[] {
       : "FAQPage missing or has fewer than 4 mainEntity questions.",
   });
 
-  // ── Word count vs content-type floor ──────────────────────────────────────
-  const floor = WORD_FLOORS[post.content_type] ?? 1500;
+  const floor = cfg.word_floors[post.content_type] ?? 1500;
   results.push({
     check: "word_count",
     label: "Word count",
@@ -182,7 +175,6 @@ export function runValidators(post: Post): ValidationResult[] {
     detail: `${post.word_count} words (floor for ${post.content_type}: ${floor}).`,
   });
 
-  // ── Sources: ≥3 distinct publishers, ≥1 government / peer-reviewed ────────
   const hosts = post.sources.map((s) => hostnameOf(s.url)).filter(Boolean);
   const distinctPublishers = new Set(hosts).size;
   const authoritativeCount = hosts.filter(isAuthoritative).length;

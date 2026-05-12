@@ -14,6 +14,7 @@ import json
 import re
 import sys
 import os
+from pathlib import Path
 
 from openai import OpenAI
 
@@ -24,19 +25,22 @@ from models import AHPRAFlag
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Regex patterns for hard-blocked terms (AHPRA s.133 advertising prohibited content)
+# Single source of truth for all editorial validators — shared with the TS
+# dashboard at extracted/lib/admin/validators.json. The TS side imports it
+# directly; we load it via a stable relative path.
+_VALIDATORS_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "extracted"
+    / "lib"
+    / "admin"
+    / "validators.json"
+)
+with open(_VALIDATORS_PATH) as _f:
+    _VALIDATORS = json.load(_f)
+
+# Regex patterns for hard-blocked terms (AHPRA s.133 advertising prohibited content).
 _FORBIDDEN: list[tuple[str, str]] = [
-    (r"\bbest doctor\b", "superlative claim — AHPRA s.133(1)(b) prohibits 'best'"),
-    (r"\bnumber[\s-]?one\b", "superlative claim — AHPRA prohibits 'number one'"),
-    (r"\b#\s?1\b", "superlative claim"),
-    (r"\bleading specialist\b", "comparative superlative — AHPRA prohibited"),
-    (r"\bmost experienced\b", "comparative superlative — AHPRA prohibited"),
-    (r"\bworld[\s-]?class\b", "superlative — AHPRA prohibited"),
-    (r"\baustralia'?s? (best|leading|top|premier)\b", "superlative claim — AHPRA prohibited"),
-    (r"\bguaranteed? (results?|outcomes?|success)\b", "outcome guarantee — AHPRA prohibited"),
-    (r"\bcure[sd]?\b", "cure claim — requires clinical evidence; flag for review"),
-    (r"\btestimonial", "patient testimonial — restricted by AHPRA"),
-    (r"\bendorsement from (a |my )?(patient|client)\b", "patient endorsement — restricted"),
+    (entry["pattern"], entry["reason"]) for entry in _VALIDATORS["ahpra_banned"]
 ]
 
 _GENERAL_DISCLAIMER = (
@@ -50,7 +54,7 @@ _PAY_DISCLAIMER = (
     "by location, specialty, employer, and individual enterprise agreement.\n"
 )
 
-_PAY_TRIGGERS = {"pay rate", "hourly rate", "daily rate", "annual salary", "earn", "income", "remuneration"}
+_PAY_TRIGGERS = set(_VALIDATORS["pay_disclaimer_triggers"])
 
 
 def _has_pay_content(content: str) -> bool:

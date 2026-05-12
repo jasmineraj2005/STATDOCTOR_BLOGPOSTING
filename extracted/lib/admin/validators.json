@@ -1,0 +1,63 @@
+{
+  "_comment": "Single source of truth for editorial validators. Read by Python agents/ahpra.py and TS extracted/lib/admin/validators.ts. Regex patterns use POSIX/PCRE syntax compatible with both Python re and JS RegExp.",
+
+  "ahpra_banned": [
+    { "pattern": "\\bbest doctor\\b", "reason": "superlative 'best doctor' — AHPRA s.133(1)(b)" },
+    { "pattern": "\\bnumber[\\s-]?one\\b", "reason": "superlative 'number one'" },
+    { "pattern": "(?:^|[^\\w])#\\s?1\\b", "reason": "superlative '#1'" },
+    { "pattern": "\\bleading specialist\\b", "reason": "comparative superlative" },
+    { "pattern": "\\bmost experienced\\b", "reason": "comparative superlative" },
+    { "pattern": "\\bworld[\\s-]?class\\b", "reason": "superlative 'world-class'" },
+    { "pattern": "\\baustralia'?s? (best|leading|top|premier)\\b", "reason": "superlative 'Australia's best/leading/top/premier'" },
+    { "pattern": "\\bguaranteed? (results?|outcomes?|success)\\b", "reason": "outcome guarantee — AHPRA prohibited" },
+    { "pattern": "\\bcure[sd]?\\b", "reason": "'cure' — requires evidence; flag for review" },
+    { "pattern": "\\btestimonial", "reason": "patient testimonial — AHPRA restricted" },
+    { "pattern": "\\bendorsement from (a |my )?(patient|client)\\b", "reason": "patient endorsement — AHPRA restricted" }
+  ],
+
+  "editorially_banned": [
+    { "pattern": "\\bcomprehensive\\b", "reason": "editorially banned per blog.md voice rules" },
+    { "pattern": "\\bdelve\\b", "reason": "editorially banned" },
+    { "pattern": "\\bgroundbreaking\\b", "reason": "editorially banned" },
+    { "pattern": "\\brobust\\b", "reason": "editorially banned" }
+  ],
+
+  "bad_anchor_patterns": [
+    "source", "link", "click here", "here", "read more"
+  ],
+
+  "callout_floors": {
+    "news": 3,
+    "guide": 4,
+    "company": 3
+  },
+
+  "word_floors": {
+    "news": 1500,
+    "guide": 1500,
+    "company": 1000
+  },
+
+  "pay_disclaimer_triggers": [
+    "pay rate", "hourly rate", "daily rate", "annual salary", "earn", "income", "remuneration"
+  ],
+
+  "authoritative_domains": [
+    "aihw.gov.au",
+    "abs.gov.au",
+    "health.gov.au",
+    "racgp.org.au",
+    "ama.com.au",
+    "ahpra.gov.au",
+    "medicalboard.gov.au",
+    "rcna.org.nz",
+    "health.govt.nz",
+    "rnzcgp.org.nz",
+    "who.int",
+    "ncbi.nlm.nih.gov",
+    "nature.com",
+    "thelancet.com",
+    "mja.com.au",
+    "bmj.com"
+  ]
+}
