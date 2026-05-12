@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +14,27 @@ class ContentPillar(str, Enum):
     NEWS = "industry_news"
     VS_AGENCY = "locum_vs_agency"
     WELLBEING = "doctor_wellbeing"
+    COMPANY = "company_pov"
+
+
+class ContentType(str, Enum):
+    NEWS = "news"
+    GUIDE = "guide"
+    COMPANY = "company"
+
+
+PostStatus = Literal["pending_review", "approved", "rejected", "published"]
+
+
+RejectionCode = Literal[
+    "off_brand_voice",
+    "weak_sources",
+    "wrong_angle",
+    "too_promotional",
+    "ahpra_disagree",
+    "topic_uninteresting",
+    "other",
+]
 
 
 PILLAR_DESCRIPTIONS: dict[ContentPillar, str] = {
@@ -92,6 +113,12 @@ class BlogPost(BaseModel):
     word_count: int
 
 
+class TwitterCard(BaseModel):
+    title: str   # ≤ 70 chars
+    description: str  # ≤ 200 chars
+    image: Optional[str] = None  # absolute URL, ≥ 1200x675 recommended
+
+
 class SEOMetadata(BaseModel):
     slug: str
     meta_title: str       # max 60 chars
@@ -99,6 +126,8 @@ class SEOMetadata(BaseModel):
     focus_keyword: str
     og_image_alt: str
     reading_time_minutes: int
+    keywords: list[str] = []  # 5–8 supplementary keywords for <meta name="keywords">
+    twitter_card: Optional[TwitterCard] = None
     faq_json_ld: dict
     medical_webpage_schema: dict
 
@@ -108,6 +137,12 @@ class AHPRAFlag(BaseModel):
     excerpt: str
     fix_applied: str
     requires_human_review: bool
+
+
+class RejectionEntry(BaseModel):
+    ts: datetime
+    code: RejectionCode
+    text: str = ""
 
 
 class FinalPost(BaseModel):
@@ -120,7 +155,10 @@ class FinalPost(BaseModel):
     content_markdown: str
     tldr: str
     pillar: ContentPillar
+    content_type: ContentType = ContentType.GUIDE
     target_keywords: list[str]
+    keywords: list[str] = []
+    twitter_card: Optional[TwitterCard] = None
     word_count: int
     reading_time_minutes: int
     sources: list[Source]
@@ -130,4 +168,12 @@ class FinalPost(BaseModel):
     medical_webpage_schema: dict
     ahpra_flags: list[AHPRAFlag]
     ahpra_passed: bool
+
+    # Review lifecycle — set by the factory's /admin/posts approval handler.
+    status: PostStatus = "pending_review"
+    last_reviewed_at: Optional[datetime] = None
+    rejection_history: list[RejectionEntry] = []
+
     generated_at: datetime = Field(default_factory=datetime.utcnow)
+    # `dateModified` is bumped by Approve and quarterly refreshes; initially mirrors generated_at.
+    dateModified: datetime = Field(default_factory=datetime.utcnow)

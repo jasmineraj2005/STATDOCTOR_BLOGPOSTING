@@ -15,12 +15,25 @@ import json
 from datetime import datetime
 
 from config import OUTPUT_DIR
-from models import FinalPost
+from models import ContentPillar, ContentType, FinalPost
 from agents.intelligence import select_topic
 from agents.researcher import research_topic
 from agents.writer import write_post
 from agents.seo import generate_seo
 from agents.ahpra import check_ahpra
+
+
+def _derive_content_type(pillar: ContentPillar) -> ContentType:
+    """Map pillar → content_type. News pillar → news; COMPANY pillar → company; else guide.
+
+    Once the Intelligence agent exposes content_type directly (40/40/20 dispatcher),
+    swap this for the agent's value. For now, pillar is the only signal available.
+    """
+    if pillar == ContentPillar.NEWS:
+        return ContentType.NEWS
+    if pillar == ContentPillar.COMPANY:
+        return ContentType.COMPANY
+    return ContentType.GUIDE
 
 
 def run_pipeline() -> FinalPost:
@@ -36,13 +49,18 @@ def run_pipeline() -> FinalPost:
     # Agent 4: Writer — write the post
     post = write_post(research)
 
-    # Agent 5: SEO — metadata + JSON-LD schemas
-    seo = generate_seo(post, topic)
+    # Decide content_type from pillar before SEO so title cadence varies correctly.
+    content_type = _derive_content_type(topic.pillar)
+
+    # Agent 5: SEO — metadata + JSON-LD schemas (cadence depends on content_type).
+    seo = generate_seo(post, topic, content_type=content_type, image_url=research.image_url)
 
     # Agent 6: AHPRA — compliance check, auto-fix, flag issues
     cleaned_content, ahpra_flags, ahpra_passed = check_ahpra(post.content_markdown)
 
-    # Assemble
+    now = datetime.utcnow()
+
+    # Assemble — status defaults to "pending_review"; Approve handler bumps to "published".
     final = FinalPost(
         title=post.title,
         slug=seo.slug,
@@ -53,7 +71,10 @@ def run_pipeline() -> FinalPost:
         content_markdown=cleaned_content,
         tldr=post.tldr,
         pillar=topic.pillar,
+        content_type=content_type,
         target_keywords=topic.target_keywords,
+        keywords=seo.keywords,
+        twitter_card=seo.twitter_card,
         word_count=len(cleaned_content.split()),
         reading_time_minutes=seo.reading_time_minutes,
         sources=research.sources,
@@ -63,6 +84,9 @@ def run_pipeline() -> FinalPost:
         medical_webpage_schema=seo.medical_webpage_schema,
         ahpra_flags=ahpra_flags,
         ahpra_passed=ahpra_passed,
+        status="pending_review",
+        generated_at=now,
+        dateModified=now,
     )
 
     _save_outputs(final)
@@ -99,6 +123,8 @@ meta_title: "{_esc(post.meta_title)}"
 meta_description: "{_esc(post.meta_description)}"
 focus_keyword: "{_esc(post.focus_keyword)}"
 pillar: "{post.pillar.value}"
+content_type: "{post.content_type.value}"
+status: "{post.status}"
 reading_time_minutes: {post.reading_time_minutes}
 word_count: {post.word_count}
 ahpra_status: "{ahpra_status}"
@@ -106,6 +132,7 @@ ahpra_flags: "{flags_summary}"
 image_url: "{post.image_url or ''}"
 image_credit: "{_esc(post.image_credit or '')}"
 generated_at: "{post.generated_at.isoformat()}"
+dateModified: "{post.dateModified.isoformat()}"
 ---
 
 """

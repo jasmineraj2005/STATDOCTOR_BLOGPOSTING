@@ -36,6 +36,7 @@ _PILLAR_LABELS = {
     "industry_news": "Industry News",
     "locum_vs_agency": "Marketplace vs Agency",
     "doctor_wellbeing": "Doctor Wellbeing",
+    "company_pov": "Inside StatDoctor",
 }
 
 
