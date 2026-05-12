@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql, isDbConfigured } from "@/lib/admin/db";
+import { recordCronRun } from "@/lib/admin/cron";
 import { upsertPost, logAudit } from "@/lib/admin/store";
 import { publishPost } from "@/lib/admin/publish";
 import { runValidators, isApprovable } from "@/lib/admin/validators";
@@ -121,6 +122,11 @@ export async function GET(req: Request) {
     }
   }
 
+  await recordCronRun(
+    "auto-publish-news",
+    true,
+    `${summary.candidates} candidates · ${summary.auto_published.length} published · ${summary.held.length} held`,
+  );
   return NextResponse.json({ ok: true, ...summary });
 }
 

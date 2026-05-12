@@ -46,3 +46,14 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 CREATE INDEX IF NOT EXISTS alerts_unack_idx ON alerts (ts DESC) WHERE acknowledged_at IS NULL;
 CREATE INDEX IF NOT EXISTS alerts_kind_idx ON alerts (kind, ts DESC);
+
+-- Cron run heartbeat — every cron updates its row on every invocation.
+-- Powers /api/health (uptime monitor) and the daily-digest email body.
+CREATE TABLE IF NOT EXISTS cron_runs (
+  kind TEXT PRIMARY KEY,
+  last_ok TIMESTAMPTZ,
+  last_fail TIMESTAMPTZ,
+  last_detail TEXT,
+  runs_total BIGINT NOT NULL DEFAULT 0,
+  fails_total BIGINT NOT NULL DEFAULT 0
+);

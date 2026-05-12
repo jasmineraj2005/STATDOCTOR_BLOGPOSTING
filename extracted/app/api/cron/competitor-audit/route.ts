@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { kv } from "@vercel/kv";
 import OpenAI from "openai";
 import { COMPETITOR_BLOG_INDEXES, type CompetitorSource } from "@/lib/admin/competitor-sources";
+import { recordCronRun } from "@/lib/admin/cron";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -204,6 +205,11 @@ export async function GET(req: Request) {
     // KV unavailable — return result anyway so manual cron triggering still has output.
   }
 
+  await recordCronRun(
+    "competitor-audit",
+    errors.length === 0,
+    `${result.raw_count} raw · ${result.proposed_count} proposed · ${errors.length} fetch errors`,
+  );
   return NextResponse.json({
     ok: true,
     raw_count: result.raw_count,
