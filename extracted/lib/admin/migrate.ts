@@ -2,7 +2,7 @@ import "server-only";
 
 import { promises as fs } from "fs";
 import path from "path";
-import { sql, isDbConfigured } from "./db";
+import { rawQuery, isDbConfigured } from "./db";
 
 /** Apply schema.sql idempotently. Safe to call on every cold start. */
 export async function applyMigrations(): Promise<{ ok: boolean; detail: string }> {
@@ -16,20 +16,22 @@ export async function applyMigrations(): Promise<{ ok: boolean; detail: string }
   } catch (e) {
     return { ok: false, detail: `Could not read schema.sql: ${String(e)}` };
   }
-  // @vercel/postgres exposes a low-level query that accepts a raw string.
-  // The tagged-template `sql` doesn't accept multi-statement DDL, so use the
-  // sql.query API (also from the same package) to apply the file as-is.
   try {
-    // Split on `;` boundary (very simple — schema.sql has no procedural blocks).
-    const statements = schema
+    // Strip line comments first, then split on `;` boundary.
+    const cleaned = schema
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("--"))
+      .join("\n");
+    const statements = cleaned
       .split(/;\s*\n/)
       .map((s) => s.trim())
-      .filter((s) => s && !s.startsWith("--"));
+      .filter((s) => s.length > 0);
     for (const stmt of statements) {
-      await sql.query(stmt);
+      await rawQuery(stmt);
     }
     return { ok: true, detail: `Applied ${statements.length} statement(s).` };
   } catch (e) {
-    return { ok: false, detail: `Migration failed: ${String(e)}` };
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, detail: `Migration failed: ${msg}` };
   }
 }
