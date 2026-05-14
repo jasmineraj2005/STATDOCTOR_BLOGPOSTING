@@ -28,9 +28,8 @@ test.describe("CEO review flow", () => {
     await expect(page.getByText("Locum Work in Sydney — Playwright Test")).toBeVisible();
     await expect(page.getByText(/All 8 checks pass|All validators green/)).toBeVisible();
 
-    // 2. Open the edit page via the "Review in detail" link (the title link
-    // also works, but this is the explicit reviewer affordance).
-    await page.getByRole("link", { name: /Review in detail/i }).first().click();
+    // 2. Open the edit page via the "EDIT" link on the queue row.
+    await page.getByRole("link", { name: "EDIT" }).first().click();
     await expect(page).toHaveURL(new RegExp(`/admin/posts/${SLUG}$`));
 
     // 3. Validator panel renders all 8 checks; Approve button is enabled.
