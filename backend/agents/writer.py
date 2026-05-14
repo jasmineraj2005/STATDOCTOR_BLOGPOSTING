@@ -84,7 +84,12 @@ INLINE CHART — embed exactly once, after the second H2 section. Use this ready
 
     prompt = f"""You are an expert medical content writer for StatDoctor ({SITE_URL}), Australia's locum doctor marketplace.
 
-Write a complete, publication-ready blog post. You MUST write at least {MIN_WORDS} words — this is a hard requirement, not a suggestion. Target {MAX_WORDS} words. Each H2 section must have at least 3 paragraphs. The FAQ section must have at least 6 Q&A pairs. Do not stop early — a short post is a failed post.
+Write a complete, publication-ready blog post. You MUST write at least {MIN_WORDS} words — this is a hard requirement, not a suggestion. Target {MAX_WORDS} words. **Section-level minimums (non-negotiable):**
+- Each body H2 section: ≥ 250 words and ≥ 3 paragraphs
+- FAQ section: ≥ 6 Q&A pairs, each answer ≥ 60 words
+- "What does this mean for locum doctors in [region]?" section: ≥ 300 words
+
+Do not stop early. A short post is a failed post. If you find yourself at 1200 words, you are not done — expand the weakest section before finishing.
 
 ═══════════════════════════════════
 BRIEF
@@ -208,6 +213,35 @@ Write the complete post now. Output only the markdown — no preamble:"""
 
     content = response.choices[0].message.content.strip()
     word_count = len(content.split())
+    print(f"  [Writer] First draft — {word_count} words (floor: {MIN_WORDS})")
+
+    # One-shot expansion retry if the first draft fell short. Bounded to avoid
+    # runaway cost. Continues the conversation so the model expands rather than
+    # rewrites from scratch.
+    if word_count < MIN_WORDS:
+        shortfall = MIN_WORDS - word_count
+        expand_prompt = (
+            f"Your draft is {word_count} words but the floor is {MIN_WORDS}. "
+            f"You are short by {shortfall} words. Expand the body — DO NOT "
+            f"shorten or rewrite anything you already wrote. Pick the 2 weakest "
+            f"H2 sections (the ones with fewest paragraphs or thinnest detail) "
+            f"and add 2-3 paragraphs each with specific examples, dollar "
+            f"figures, and inline citations. Keep the same H2 headings; just "
+            f"deepen the content under them. Output the full expanded post."
+        )
+        response = client.chat.completions.create(
+            model=WRITER_MODEL,
+            messages=[
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": content},
+                {"role": "user", "content": expand_prompt},
+            ],
+            temperature=0.65,
+            max_tokens=6000,
+        )
+        content = response.choices[0].message.content.strip()
+        word_count = len(content.split())
+        print(f"  [Writer] After expansion — {word_count} words")
 
     # Extract TL;DR for the model field
     tldr = ""
