@@ -18,7 +18,7 @@ export default async function PostEditPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  if (!(await isAuthorised())) redirect("/admin/login");
+  if (!(await isAuthorised())) redirect("/login");
 
   const { slug } = await params;
   const file = await getPostBySlug(slug);

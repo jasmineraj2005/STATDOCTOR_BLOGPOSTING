@@ -21,7 +21,7 @@ const BUCKET_CLASS: Record<KeywordRow["bucket"], string> = {
 };
 
 export default async function KeywordsPage() {
-  if (!(await isAuthorised())) redirect("/admin/login");
+  if (!(await isAuthorised())) redirect("/login");
   const rows = await getKeywordTracker();
 
   return (

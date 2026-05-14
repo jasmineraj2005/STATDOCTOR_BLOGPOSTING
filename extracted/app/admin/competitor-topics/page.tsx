@@ -26,7 +26,7 @@ type AuditResult = {
 
 export default async function CompetitorTopicsAdmin() {
   if (!(await isAuthorised())) {
-    redirect("/admin/login");
+    redirect("/login");
   }
 
   let result: AuditResult | null = null;

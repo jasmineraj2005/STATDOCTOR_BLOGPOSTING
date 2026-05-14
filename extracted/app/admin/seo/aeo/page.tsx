@@ -28,7 +28,7 @@ async function getRecentEntries(): Promise<AeoRow[]> {
 }
 
 export default async function AeoPage() {
-  if (!(await isAuthorised())) redirect("/admin/login");
+  if (!(await isAuthorised())) redirect("/login");
   const rows = await getRecentEntries();
   const recent = rows.length;
   const recentCited = rows.filter((r) => r.cited).length;

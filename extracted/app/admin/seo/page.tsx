@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function SeoOverviewPage() {
-  if (!(await isAuthorised())) redirect("/admin/login");
+  if (!(await isAuthorised())) redirect("/login");
 
   const [overview, articles] = await Promise.all([
     getOverview(),

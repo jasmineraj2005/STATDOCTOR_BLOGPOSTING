@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function PostsQueue() {
-  if (!(await isAuthorised())) redirect("/admin/login");
+  if (!(await isAuthorised())) redirect("/login");
 
   const [pending, all] = await Promise.all([
     getPendingPosts(),
