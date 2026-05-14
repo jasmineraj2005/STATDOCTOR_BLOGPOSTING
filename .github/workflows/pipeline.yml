@@ -6,7 +6,9 @@ name: Pipeline — generate an article
 
 on:
   schedule:
-    - cron: "0 14 * * 1,3,5"
+    # Mon / Wed / Fri / Sat at 14:00 UTC — 4 articles per week so the CEO has
+    # a full Sunday batch to review.
+    - cron: "0 14 * * 1,3,5,6"
   workflow_dispatch:
     inputs:
       mode:

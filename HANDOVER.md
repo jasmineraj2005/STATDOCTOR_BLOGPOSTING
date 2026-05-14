@@ -152,33 +152,39 @@ GitHub → **Actions** → **Pipeline — generate an article** → **Run workfl
 
 | When | What | Where |
 |---|---|---|
-| Mon / Wed / Fri 14:00 UTC | Pipeline generates an article | GitHub Actions → "Pipeline" |
+| Mon / Wed / Fri / Sat 14:00 UTC | Pipeline generates an article (4/week) | GitHub Actions → "Pipeline" |
 | Mon / Wed / Fri 14:00 UTC | Competitor audit | Dashboard `/admin/competitor-topics` |
-| Daily 03:00 UTC | Auto-publish news posts > 48h old | DB row flipped + audit event |
+| Daily 02:00 UTC | SEO snapshot (GSC + Bing) | Dashboard `/admin/seo` |
+| Tue / Wed / Fri / Sun 09:00 UTC | Scheduler publishes one queued article | Live website + audit event |
 | Daily 22:00 UTC | Daily digest email | Inbox |
 | Continuously | Uptime monitor checks `/api/health` | UptimeRobot dashboard / email alerts |
-| Sundays (~20 min) | CEO batch-review queue | `/admin/posts` |
+| Sundays (~20 min) | CEO batch-review queue (4 articles ready) | `/admin/posts` |
 
 **Each generated article lifecycle:**
 
 ```
-Pipeline run
+Pipeline run (Mon/Wed/Fri/Sat 14:00 UTC)
     ↓
 /api/admin/ingest (inserts as status='pending_review')
     ↓
-─── if News & 48h elapsed ──→  auto-publish-news cron flips to 'published'
-─── if Guide / Inside StatDoctor ──→  waits in /admin/posts for CEO
+Waits in /admin/posts for CEO — every article requires manual review.
     ↓
-CEO opens /admin/posts/[slug]
+CEO opens /admin/posts/[slug] on Sunday
     ↓
 Validators panel (8 checks): AHPRA, banned phrases, anchor text, callouts,
 table, schema, words, sources. Approve button enabled only when all green.
     ↓
-─── Approve → status='approved', publish.ts commits JSON to website repo,
-                                  status='published'
+─── Approve → status='scheduled' (queued, NOT live yet)
 ─── Reject (with reason taxonomy) → status='rejected'; after 2 rejections
                                     the topic is dropped permanently
 ─── Edit → re-validates; status back to 'pending_review'
+    ↓
+Scheduler cron (Tue/Wed/Fri/Sun 09:00 UTC) picks oldest 'scheduled' article
+and publishes it. One article per slot — keeps the cadence uniform.
+    ↓
+publish.ts commits JSON to website repo (GitHub API) → site rebuilds
+    ↓
+status='published'
 ```
 
 ---
