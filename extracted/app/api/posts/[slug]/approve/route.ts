@@ -3,11 +3,21 @@ import { redirect } from "next/navigation";
 import { isAuthorised } from "@/lib/admin/auth";
 import { getPostBySlug, upsertPost, logAudit } from "@/lib/admin/store";
 import { runValidators, isApprovable } from "@/lib/admin/validators";
-import { publishPost } from "@/lib/admin/publish";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/**
+ * Approve handler.
+ *
+ * Approval = "queued for publication", not "live now". The /api/cron/scheduled-
+ * publish cron fires Tue/Wed/Fri/Sun at 09:00 UTC and publishes one 'scheduled'
+ * article per slot. So:
+ *
+ *   pending_review  ─[Approve]──▶  scheduled  ─[scheduler cron]──▶  published
+ *                                      │
+ *                                      └────[Edit]─▶  pending_review (re-review)
+ */
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ slug: string }> },
@@ -33,37 +43,20 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
-  const approved = {
+  const scheduled = {
     ...file.post,
-    status: "approved" as const,
+    status: "scheduled" as const,
     last_reviewed_at: now,
     dateModified: now,
   };
+  await upsertPost(file, scheduled);
 
-  await upsertPost(file, approved);
-
-  const result = await publishPost({ ...file, post: approved });
-
-  if (result.ok) {
-    await upsertPost(file, { ...approved, status: "published" });
-    await logAudit({
-      ts: now,
-      slug,
-      action: "publish",
-      detail: result.detail,
-    });
-  } else {
-    await logAudit({
-      ts: now,
-      slug,
-      action: "publish-failed",
-      detail: result.detail,
-    });
-    return NextResponse.json(
-      { error: "publish_failed", detail: result.detail },
-      { status: 500 },
-    );
-  }
+  await logAudit({
+    ts: now,
+    slug,
+    action: "approve",
+    detail: "Approved — queued for next scheduled publish slot",
+  });
 
   redirect("/admin/posts");
 }

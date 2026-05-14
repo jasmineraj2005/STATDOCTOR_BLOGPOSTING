@@ -3,7 +3,12 @@
  * file on disk is the contract between the Python pipeline and this admin.
  */
 
-export type PostStatus = "pending_review" | "approved" | "rejected" | "published";
+export type PostStatus =
+  | "pending_review"
+  | "approved"
+  | "scheduled"
+  | "rejected"
+  | "published";
 
 export type RejectionCode =
   | "off_brand_voice"

@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 // Per-cron maximum tolerated staleness (hours) — beyond this we report "stale".
 const CRON_STALENESS_HOURS: Record<string, number> = {
-  "auto-publish-news": 26, // daily expected
+  "scheduled-publish": 26, // daily expected
   "competitor-audit": 80, // 3×/wk → 56h max-gap + 24h buffer
   "seo-snapshot": 50, // daily expected, GSC has a 2-day lag
   "daily-digest": 26, // daily expected

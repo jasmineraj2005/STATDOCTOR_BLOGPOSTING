@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS posts (
   slug TEXT PRIMARY KEY,
   filename TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending_review'
-    CHECK (status IN ('pending_review','approved','rejected','published')),
+    CHECK (status IN ('pending_review','approved','scheduled','rejected','published')),
   pillar TEXT NOT NULL,
   content_type TEXT NOT NULL
     CHECK (content_type IN ('news','guide','company')),
@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 
 CREATE INDEX IF NOT EXISTS posts_status_idx ON posts (status, generated_at DESC);
+-- Fast lookup for the scheduler: oldest scheduled article eligible to publish.
+CREATE INDEX IF NOT EXISTS posts_scheduled_idx ON posts (status, last_reviewed_at) WHERE status = 'scheduled';
 
 CREATE TABLE IF NOT EXISTS audit_events (
   id BIGSERIAL PRIMARY KEY,
