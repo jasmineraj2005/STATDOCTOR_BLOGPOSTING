@@ -11,7 +11,10 @@ export default function Header({ logoHref, light }: { logoHref?: string; light?:
   const logoUrl = logoHref ?? "/"
   const isExternal = /^https?:\/\//.test(logoUrl)
   const pathname = usePathname()
-  const inDashboard = pathname?.startsWith("/dashboard") ?? false
+  const inAdmin =
+    pathname?.startsWith("/admin") ||
+    pathname?.startsWith("/dashboard") || // legacy paths (redirected, but render briefly)
+    false
 
   return (
     <header
@@ -73,19 +76,30 @@ export default function Header({ logoHref, light }: { logoHref?: string; light?:
         />
       </a>
 
-      {/* Navigation — only in dashboard section */}
+      {/* Navigation — only in admin section */}
       <nav className="flex items-center gap-1">
-        {inDashboard && (
+        {inAdmin && (
           <>
             <NavLink
-              href="/dashboard"
-              active={pathname === "/dashboard" || pathname?.startsWith("/dashboard/posts")}
+              href="/admin/posts"
+              active={pathname?.startsWith("/admin/posts") ?? false}
               light={light}
             >
               Posts
             </NavLink>
-            <NavLink href="/dashboard/analytics" active={pathname === "/dashboard/analytics"} light={light}>
-              Analytics
+            <NavLink
+              href="/admin/seo"
+              active={pathname?.startsWith("/admin/seo") ?? false}
+              light={light}
+            >
+              SEO
+            </NavLink>
+            <NavLink
+              href="/admin/competitor-topics"
+              active={pathname?.startsWith("/admin/competitor-topics") ?? false}
+              light={light}
+            >
+              Topics
             </NavLink>
           </>
         )}

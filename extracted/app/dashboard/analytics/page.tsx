@@ -1,18 +1,6 @@
-import ShaderBackground from "@/components/shader-background"
-import Header from "@/components/header"
-import AnalyticsDashboard from "@/components/analytics-dashboard"
-import { getAllPosts, computeStats } from "@/lib/posts-server"
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic"
-
-export default function AnalyticsPage() {
-  const posts = getAllPosts()
-  const stats = computeStats(posts)
-
-  return (
-    <ShaderBackground>
-      <Header />
-      <AnalyticsDashboard posts={posts} stats={stats} />
-    </ShaderBackground>
-  )
+// Legacy v0 analytics — superseded by /admin/seo (Postgres-backed SEO dashboard).
+export default function DashboardAnalyticsLegacyRedirect() {
+  redirect("/admin/seo");
 }
