@@ -5,8 +5,11 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 export default function Header({ logoHref, light }: { logoHref?: string; light?: boolean }) {
-  const logoUrl = logoHref ?? "https://statdoctor.app/"
-  const isExternal = !logoHref
+  // Logo should keep the operator inside the admin app by default.
+  // Pass logoHref="https://statdoctor.app/" explicitly if you want it to go
+  // to the marketing site.
+  const logoUrl = logoHref ?? "/"
+  const isExternal = /^https?:\/\//.test(logoUrl)
   const pathname = usePathname()
   const inDashboard = pathname?.startsWith("/dashboard") ?? false
 
