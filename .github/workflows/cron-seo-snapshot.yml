@@ -1,0 +1,24 @@
+name: Cron — seo-snapshot
+
+# Daily 02:00 UTC. Pulls yesterday's Google Search Console + Bing Webmaster
+# data into the DB. Both have a 2-3 day reporting delay so each day's pull
+# also refreshes recent dates via the upsert.
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hit /api/cron/seo-snapshot
+        run: |
+          curl --fail-with-body \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            ${{ secrets.CRON_BASE_URL }}/api/cron/seo-snapshot

@@ -59,3 +59,56 @@ CREATE TABLE IF NOT EXISTS cron_runs (
   runs_total BIGINT NOT NULL DEFAULT 0,
   fails_total BIGINT NOT NULL DEFAULT 0
 );
+
+-- ── SEO progress tracking ─────────────────────────────────────────────────────
+-- Daily snapshots pulled from Google Search Console (gsc_daily_snapshot) and
+-- Bing Webmaster Tools (bing_daily_snapshot). Aggregated by /admin/seo.
+
+CREATE TABLE IF NOT EXISTS gsc_daily_snapshot (
+  date         DATE       NOT NULL,
+  query        TEXT       NOT NULL,
+  page         TEXT       NOT NULL,
+  country      TEXT       NOT NULL DEFAULT '',
+  device       TEXT       NOT NULL DEFAULT '',
+  clicks       INT        NOT NULL DEFAULT 0,
+  impressions  INT        NOT NULL DEFAULT 0,
+  position     NUMERIC    NOT NULL DEFAULT 0,
+  PRIMARY KEY (date, query, page, country, device)
+);
+CREATE INDEX IF NOT EXISTS gsc_date_idx ON gsc_daily_snapshot (date DESC);
+CREATE INDEX IF NOT EXISTS gsc_query_idx ON gsc_daily_snapshot (query, date DESC);
+CREATE INDEX IF NOT EXISTS gsc_page_idx ON gsc_daily_snapshot (page, date DESC);
+
+CREATE TABLE IF NOT EXISTS bing_daily_snapshot (
+  date         DATE       NOT NULL,
+  query        TEXT       NOT NULL,
+  page         TEXT       NOT NULL DEFAULT '',
+  clicks       INT        NOT NULL DEFAULT 0,
+  impressions  INT        NOT NULL DEFAULT 0,
+  position     NUMERIC    NOT NULL DEFAULT 0,
+  PRIMARY KEY (date, query, page)
+);
+CREATE INDEX IF NOT EXISTS bing_date_idx ON bing_daily_snapshot (date DESC);
+
+-- CEO-curated target keyword list. Per-pillar so the dashboard can filter.
+CREATE TABLE IF NOT EXISTS keyword_targets (
+  id          BIGSERIAL  PRIMARY KEY,
+  keyword     TEXT       NOT NULL UNIQUE,
+  pillar      TEXT       NOT NULL,
+  notes       TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Manual AEO citation log — periodic CEO checks of "did ChatGPT / Claude /
+-- Perplexity cite us for keyword X?" No free API exists for this yet.
+CREATE TABLE IF NOT EXISTS aeo_log (
+  id          BIGSERIAL  PRIMARY KEY,
+  ts          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  keyword     TEXT       NOT NULL,
+  model       TEXT       NOT NULL,  -- 'chatgpt' | 'claude' | 'perplexity' | 'gemini' | 'copilot' | 'other'
+  cited       BOOLEAN    NOT NULL,
+  snippet     TEXT,
+  notes       TEXT
+);
+CREATE INDEX IF NOT EXISTS aeo_ts_idx ON aeo_log (ts DESC);
+CREATE INDEX IF NOT EXISTS aeo_keyword_idx ON aeo_log (keyword, ts DESC);
