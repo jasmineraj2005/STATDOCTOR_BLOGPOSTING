@@ -22,6 +22,16 @@ extracted/out/
 extracted/next-env.d.ts
 extracted/*.tsbuildinfo
 
+# Playwright
+extracted/test-results/
+extracted/playwright-report/
+extracted/.last-run.json
+extracted/playwright/.cache/
+
+# pytest
+backend/.pytest_cache/
+backend/tests/__pycache__/
+
 # Node
 node_modules/
 extracted/node_modules/
