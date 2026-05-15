@@ -19,4 +19,11 @@ describe("coverage gates", () => {
     expect(ci).toMatch(/playwright/);
     expect(ci).toMatch(/pytest/);
   });
+  it("CI pytest job binds OPENAI_API_KEY from secrets", () => {
+    const ciPath = path.join(REPO_ROOT, ".github/workflows/ci.yml");
+    const ci = readFileSync(ciPath, "utf8");
+    // Pytest job should declare OPENAI_API_KEY env so module-level OpenAI client
+    // does not blow up at collection time.
+    expect(ci).toMatch(/OPENAI_API_KEY:\s*\$\{\{\s*secrets\.OPENAI_API_KEY\s*\}\}/);
+  });
 });

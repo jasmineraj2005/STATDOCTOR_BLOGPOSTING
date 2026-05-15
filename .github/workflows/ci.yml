@@ -58,3 +58,5 @@ jobs:
         working-directory: backend
       - run: pytest --cov=. --cov-report=term-missing
         working-directory: backend
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
