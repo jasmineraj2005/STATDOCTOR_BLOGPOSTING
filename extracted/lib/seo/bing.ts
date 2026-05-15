@@ -20,11 +20,20 @@ export type BingFetchSummary = {
   detail: string;
 };
 
+export type BingSnapshotRow = {
+  date: string;
+  query: string;
+  page: string;
+  clicks: number;
+  impressions: number;
+  position: number;
+};
+
 function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-type BingQueryStat = {
+export type BingQueryStat = {
   Query: string;
   Clicks: number;
   Impressions: number;
@@ -33,10 +42,28 @@ type BingQueryStat = {
   Date: string; // "/Date(1747526400000+0000)/" — needs parsing
 };
 
-function parseBingDate(raw: string): string {
+export function parseBingDate(raw: string): string {
   const match = raw.match(/\/Date\((-?\d+)/);
   if (!match) return "";
   return ymd(new Date(Number(match[1])));
+}
+
+/**
+ * Pure parser: filters raw Bing API rows to only those matching targetDate,
+ * and maps them to snapshot rows ready for DB upsert.
+ * Exported so it can be unit-tested independently of the API / DB layer.
+ */
+export function parseBingRows(rows: BingQueryStat[], targetDate: string): BingSnapshotRow[] {
+  return rows
+    .filter((r) => parseBingDate(r.Date) === targetDate)
+    .map((r) => ({
+      date: targetDate,
+      query: r.Query,
+      page: "",
+      clicks: r.Clicks,
+      impressions: r.Impressions,
+      position: r.AvgImpressionPosition,
+    }));
 }
 
 export async function fetchBingYesterday(): Promise<BingFetchSummary> {
@@ -76,7 +103,7 @@ export async function fetchBingYesterday(): Promise<BingFetchSummary> {
   }
 
   const all = body.d ?? [];
-  const filtered = all.filter((r) => parseBingDate(r.Date) === date);
+  const filtered = parseBingRows(all, date);
   if (filtered.length === 0) {
     return {
       ok: true,
@@ -90,12 +117,12 @@ export async function fetchBingYesterday(): Promise<BingFetchSummary> {
     await sql`
       INSERT INTO bing_daily_snapshot (date, query, page, clicks, impressions, position)
       VALUES (
-        ${date},
-        ${r.Query},
-        ${""},
-        ${r.Clicks},
-        ${r.Impressions},
-        ${r.AvgImpressionPosition}
+        ${r.date},
+        ${r.query},
+        ${r.page},
+        ${r.clicks},
+        ${r.impressions},
+        ${r.position}
       )
       ON CONFLICT (date, query, page) DO UPDATE SET
         clicks      = EXCLUDED.clicks,

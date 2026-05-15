@@ -1,0 +1,36 @@
+{
+  "d": [
+    {
+      "Query": "locum doctor pay rates",
+      "Clicks": 12,
+      "Impressions": 380,
+      "AvgClickPosition": 2.1,
+      "AvgImpressionPosition": 3.5,
+      "Date": "/Date(1747526400000+0000)/"
+    },
+    {
+      "Query": "ahpra registration",
+      "Clicks": 8,
+      "Impressions": 210,
+      "AvgClickPosition": 5.2,
+      "AvgImpressionPosition": 7.8,
+      "Date": "/Date(1747526400000+0000)/"
+    },
+    {
+      "Query": "medical indemnity cost",
+      "Clicks": 3,
+      "Impressions": 95,
+      "AvgClickPosition": 11.0,
+      "AvgImpressionPosition": 12.4,
+      "Date": "/Date(1747526400000+0000)/"
+    },
+    {
+      "Query": "old query from last week",
+      "Clicks": 50,
+      "Impressions": 900,
+      "AvgClickPosition": 1.2,
+      "AvgImpressionPosition": 2.0,
+      "Date": "/Date(1746921600000+0000)/"
+    }
+  ]
+}
