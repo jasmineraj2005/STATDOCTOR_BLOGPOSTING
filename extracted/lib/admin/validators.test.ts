@@ -121,6 +121,20 @@ describe("Banned phrases", () => {
     });
   }
 
+  it("fails when AHPRA-banned phrase is present", () => {
+    const p = makePost({
+      content_markdown: makePost().content_markdown + "\n\nWe are the best doctor in Sydney.",
+    });
+    expect(result(p, "banned_phrases").status).toBe("fail");
+  });
+
+  it("warns when only an editorial-banned phrase is present", () => {
+    const p = makePost({
+      content_markdown: makePost().content_markdown + "\n\nA comprehensive overview.",
+    });
+    expect(result(p, "banned_phrases").status).toBe("warn");
+  });
+
   it("passes on clean content", () => {
     expect(result(makePost(), "banned_phrases").status).toBe("pass");
   });
