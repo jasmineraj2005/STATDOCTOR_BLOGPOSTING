@@ -20,6 +20,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
+      // Stub out server-only so tests can import Next.js server modules
+      // without the package throwing (it's a compile-time guard, not a runtime need).
+      "server-only": path.resolve(__dirname, "__mocks__/server-only.ts"),
     },
   },
 });

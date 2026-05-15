@@ -12,6 +12,12 @@ export type PublishResult = {
   detail: string;
 };
 
+export type PublishOpts = {
+  fetcher?: typeof fetch;
+  sleeper?: (ms: number) => Promise<void>;
+  maxRetries?: number;
+};
+
 function safeFilename(file: PostFile): string {
   // Reuse the existing filename — preserves timestamp + slug ordering on the website.
   return file.filename;
@@ -44,7 +50,11 @@ async function publishToFs(file: PostFile, targetDir: string): Promise<PublishRe
   }
 }
 
-async function publishToGitHub(file: PostFile): Promise<PublishResult> {
+export async function publishToGitHub(file: PostFile, opts: PublishOpts = {}): Promise<PublishResult> {
+  const fetcher = opts.fetcher ?? fetch;
+  const sleeper = opts.sleeper ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const maxRetries = opts.maxRetries ?? 3;
+
   const token = process.env.GITHUB_TOKEN;
   const owner = process.env.WEBSITE_REPO_OWNER;
   const repo = process.env.WEBSITE_REPO_NAME;
@@ -63,7 +73,7 @@ async function publishToGitHub(file: PostFile): Promise<PublishResult> {
 
   // Read existing JSON so we can include sha if the file already exists.
   let sha: string | undefined;
-  const headRes = await fetch(`${apiUrl}?ref=${branch}`, {
+  const headRes = await fetcher(`${apiUrl}?ref=${branch}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
   });
   if (headRes.ok) {
@@ -72,37 +82,71 @@ async function publishToGitHub(file: PostFile): Promise<PublishResult> {
   }
 
   const content = serialise(file);
-  const body = {
+  const bodyObj = {
     message: `Publish blog post: ${file.post.slug}`,
     content: Buffer.from(content, "utf-8").toString("base64"),
     branch,
     sha,
   };
+  const bodyStr = JSON.stringify(bodyObj);
+  const putHeaders = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "Content-Type": "application/json",
+  };
 
-  const putRes = await fetch(apiUrl, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  const destination = `${owner}/${repo}:${pathInRepo}@${branch}`;
 
-  if (!putRes.ok) {
+  // Retry loop around the PUT — retries on 5xx, not on 4xx.
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const putRes = await fetcher(apiUrl, {
+      method: "PUT",
+      headers: putHeaders,
+      body: bodyStr,
+    });
+
+    if (putRes.ok) {
+      return {
+        mode: "github",
+        ok: true,
+        destination,
+        detail: `Committed to ${owner}/${repo} on branch ${branch}.`,
+      };
+    }
+
+    // 422 / 409 = SHA conflict — file already exists with a different SHA.
+    // Treat as success: the content is already published.
+    if (putRes.status === 422 || putRes.status === 409) {
+      return {
+        mode: "github",
+        ok: true,
+        destination,
+        detail: `File already exists (HTTP ${putRes.status}); treating as published.`,
+      };
+    }
+
+    // 5xx — retry with exponential backoff (200ms, 800ms, 3.2s, …).
+    if (putRes.status >= 500 && attempt < maxRetries) {
+      await sleeper(200 * Math.pow(4, attempt - 1));
+      continue;
+    }
+
+    // 4xx (other than 409/422) or exhausted retries on 5xx.
     const text = await putRes.text();
     return {
       mode: "github",
       ok: false,
-      destination: `${owner}/${repo}:${pathInRepo}@${branch}`,
+      destination,
       detail: `GitHub PUT ${putRes.status}: ${text.slice(0, 200)}`,
     };
   }
+
+  // Safety return — reached when maxRetries exhausted via 5xx on the last attempt.
   return {
     mode: "github",
-    ok: true,
-    destination: `${owner}/${repo}:${pathInRepo}@${branch}`,
-    detail: `Committed to ${owner}/${repo} on branch ${branch}.`,
+    ok: false,
+    destination,
+    detail: `GitHub PUT failed after ${maxRetries} attempts.`,
   };
 }
 
