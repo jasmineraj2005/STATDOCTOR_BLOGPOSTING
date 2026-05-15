@@ -20,7 +20,7 @@ jobs:
       - run: pnpm exec tsc --noEmit
         working-directory: extracted
       # Green-bar check: run tests without coverage enforcement until M0.T10
-      - run: pnpm exec vitest run
+      - run: pnpm test
         working-directory: extracted
       # Coverage report: informational only until M0.T10 backfill complete
       # TODO(M0.T10): re-enable coverage thresholds once backfill complete

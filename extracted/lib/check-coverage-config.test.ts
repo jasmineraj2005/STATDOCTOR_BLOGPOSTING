@@ -15,7 +15,7 @@ describe("coverage gates", () => {
     const ciPath = path.join(REPO_ROOT, ".github/workflows/ci.yml");
     expect(existsSync(ciPath)).toBe(true);
     const ci = readFileSync(ciPath, "utf8");
-    expect(ci).toMatch(/vitest/);
+    expect(ci).toMatch(/pnpm test/);
     expect(ci).toMatch(/playwright/);
     expect(ci).toMatch(/pytest/);
   });
