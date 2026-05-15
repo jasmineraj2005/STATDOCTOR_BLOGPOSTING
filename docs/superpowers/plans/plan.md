@@ -91,9 +91,9 @@ Live status, kept in sync with each task. New entries appended at the bottom. Br
 | M0.T3 — Publish adapter tests | ✅ DONE | `4151dc1` | Refactored `publishToGitHub` to accept `opts: { fetcher, sleeper, maxRetries }`. Added 5xx retry with exponential backoff. 422/409 SHA conflict treated as success ("already exists"). Added `__mocks__/server-only.ts` shim + vitest alias to import server-only modules in Node tests. Public `publishPost(file)` signature unchanged; one production caller unaffected. The plan's "no-op when called twice with same key" deferred to M0.T4 (idempotency lives at approve layer). 71 tests. |
 | M0.T4 — Atomic approve | ✅ DONE | `8cb9d8d` → `5b12e19` (TS + JSONB drift fixes) | New `claimForApproval(slug)` in `store.ts` using single atomic `UPDATE … WHERE status='pending_review' RETURNING …`. Postgres row-locks handle concurrency. `approve/route.ts` rewritten to read → validate (pure) → claim → 409-if-null → audit → redirect. pg-mem-backed store tests + 4 route tests. 79 tests passing, `tsc --noEmit` clean (3 pre-existing component errors only). |
 | M0.T5 — Sunday-review e2e specs | ✅ DONE_WITH_CONCERNS | `be9ac61` (Tier A) `66da689` (Tier B fixme) | 6 Tier-A specs passing: `admin-auth` (2), `validator-gate`, `concurrent-approve`, `queue-rendering`, `edit-then-approve`. 5 Tier-B `test.fixme` skeletons placed: `sunday-signin`, `sunday-batch-25min`, `publish-fail`, `retry-publish`, `seo-dashboard`. **Carry-overs surfaced (do not block M0):** (a) pre-existing `e2e/admin-flow.spec.ts` is failing because it never set the `admin_token` cookie — needs a separate `setAdminCookie` patch; (b) `/login` form is disconnected from `admin_token` cookie — login form pushes to `/dashboard` but never sets the auth cookie; (c) magic-link wording in plan was speculative — current auth is cookie-based. |
-| M0.T6 — Backend agent pytest | ⏳ Next | — | — |
-| M0.T7 — Source-adapter pytest | ⏳ Pending | — | — |
-| M0.T8 — SEO parser tests | ⏳ Pending | — | — |
+| M0.T6 — Backend agent pytest | ✅ DONE | `623998e` `640ca9e` `ec8b362` `7e82eea` `700f385` | 128 tests, 0 failures. Per-agent coverage: intelligence 100%, researcher 95%, writer 100%, seo 98%, ahpra 98%. LLM calls mocked at `client.chat.completions.create` boundary; httpx calls mocked at `httpx.get`. M1 concerns: `datetime.utcnow()` deprecated in 3 agents (intelligence, writer, seo); `researcher.py` million-multiplier regex branch uncovered. |
+| M0.T7 — Source-adapter pytest | ✅ N/A | — | The `backend/sources/{guardian,…}.py` adapter pattern from `BLOG_AGENT.md` was planned but **never built**. Source fetching is inline in `agents/researcher.py` + `agents/intelligence.py`, which M0.T6 already covers (38 tests, ≥95% coverage). If the adapter pattern is built later (e.g., to refactor `validation/urls.py` integration in M1), tests follow then. |
+| M0.T8 — SEO parser tests | ⏳ Next | — | — |
 | M0.T9 — Health endpoint contract | ⏳ Pending | — | — |
 | M0.T10 — Chaos / recovery tests | ⏳ Pending | — | — |
 
@@ -104,7 +104,7 @@ Live status, kept in sync with each task. New entries appended at the bottom. Br
 ### Test counts as of last task
 - Vitest: **79 passing** (was 38 at start of M0).
 - Playwright: 6 Tier-A specs passing + 2 pre-existing specs failing (carry-over) + 5 fixme.
-- Pytest: 1 file `test_ahpra.py` (M0.T6 will expand).
+- Pytest: **128 passing** across 6 test files: `test_ahpra.py`, `test_ahpra_supplemental.py`, `test_intelligence.py`, `test_researcher.py`, `test_writer.py`, `test_seo.py`. Agent coverage ≥95% on all 5.
 
 ---
 
