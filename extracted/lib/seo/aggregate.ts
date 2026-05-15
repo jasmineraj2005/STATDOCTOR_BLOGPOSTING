@@ -51,12 +51,41 @@ export type SeoOverview = {
   has_data: boolean;
 };
 
-function bucket(position: number | null): KeywordBucket {
+/**
+ * Classify a GSC average position into a keyword bucket tier.
+ * Exported for unit testing.
+ */
+export function bucketPosition(position: number | null): KeywordBucket {
   if (position == null) return "unranked";
   if (position <= 3) return "top3";
   if (position <= 10) return "top10";
   if (position <= 100) return "top100";
   return "unranked";
+}
+
+// Internal alias for backward-compat usage within this file.
+const bucket = bucketPosition;
+
+/**
+ * Pure client-side aggregation: sum clicks and impressions per day from an
+ * array of {date, clicks, impressions} objects (e.g., raw snapshot rows).
+ * Returns results sorted ascending by date.
+ * Exported for unit testing.
+ */
+export function aggregateByDay(
+  rows: Array<{ date: string; clicks: number; impressions: number }>,
+): DailyTrendPoint[] {
+  const map = new Map<string, { clicks: number; impressions: number }>();
+  for (const r of rows) {
+    const existing = map.get(r.date) ?? { clicks: 0, impressions: 0 };
+    map.set(r.date, {
+      clicks: existing.clicks + r.clicks,
+      impressions: existing.impressions + r.impressions,
+    });
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, { clicks, impressions }]) => ({ date, clicks, impressions }));
 }
 
 /** Empty-state response when GSC hasn't been wired or no snapshots exist yet. */
