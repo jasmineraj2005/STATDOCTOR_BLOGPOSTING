@@ -107,6 +107,34 @@ Live status, kept in sync with each task. New entries appended at the bottom. Br
 - Pytest: **128 passing** across 6 test files. Agent coverage ≥95% on all 5.
 - **Total automated tests: 272 passing + 16 skipped.** Up from ~62 at the start of M0.
 
+### SEO/AEO Cross-Check (May 2026) — new gaps to fold into M3, M6, and a new M6.5
+
+External research against 2026 schema.org / Perplexity / WCAG state. Items below are NOT in `blog.md` / `BLOG_AGENT.md` / `ARCHITECTURE_101X.md` — they are new to the plan.
+
+**NEW schema/markup gaps (fold into M6 — Website Schema Artefacts):**
+- **`Organization` schema** at site root (`website/app/layout.tsx`) with `sameAs` to LinkedIn, Wikidata, App Store, ABN/ASIC. Highest-leverage entity-disambiguation signal post-March 2026 core update.
+- **`reviewedBy` property** on every `MedicalScholarlyArticle` (and on the legacy `MedicalWebPage` until migration). Dr Anu is both author and reviewer; populate both. This is the YMYL trust signal Google quality raters flag as deficit when missing.
+- **`citation` property** on `MedicalScholarlyArticle` populated from the existing `sources[]` array. Serialise sources into JSON-LD `citation` ScholarlyArticle objects in `backend/agents/seo.py`, not just into the UI gallery. Enables Perplexity + Google to traverse the source graph.
+- **`publicationType`** with MeSH vocabulary (`"Review"` for guides, `"Practice Guideline"` where applicable). Zero-cost addition to the SEO agent's schema builder.
+- **`Speakable` scoped to news only** — `content_type === 'news'` gating in the writer/SEO agent. Applying `Speakable` to guides/company content is over-claiming and may trigger misleading-markup classification.
+- **`geo.country` + `geo.placename`** in `<head>` (not just `geo.region`). Used by Bing and regional engines.
+
+**NEW operational gaps (fold into M3 — Domain Attach):**
+- **Perplexity Publisher Program enrollment** — free, gated only on `statdoctor.app` being live. Healthcare publishers get above-average citation volumes per the program's published examples. Do this in the same session as GSC/Bing verification.
+- **WCAG 2.2 AA legal compliance** — Australia formally adopted WCAG 2.2 AA as the national standard under the Disability Discrimination Act 1992. Add an axe-core Playwright pass to E2E. Adds 1 spec to Tier-A. Specific 2.2 criteria not in 2.1: 2.4.11 focus appearance, 2.5.7 dragging movements, 2.5.8 target size, 3.2.6 consistent help, 3.3.7 redundant entry, 3.3.8 accessible authentication.
+
+**NEW CI gap:**
+- **Schemar GitHub Action for JSON-LD validation on every published URL.** Closes the manual "schema validates" step in the current checklist. Lands in `.github/workflows/` alongside `pipeline.yml`. Gated on the public reader being live (M3).
+
+**Anti-patterns to retire (fold into M6 + M4):**
+- **Don't rely on FAQPage rich results** — Google's March 2026 core update cut FAQ rich-result impressions ~50% and now restricts display to pages where FAQ is the primary content purpose. Keep the JSON-LD (still helps LLMs) but drop FAQ rich-result-eligibility from the publishing checklist.
+- **Drop `<meta name="keywords">`** from the public page head. Ignored by Google since 2009; flagged as spam signal by Bing. The internal `keywords[]` JSON field can stay; just don't render it to `<meta>`.
+
+**Adding a new milestone M6.5 — Schema + WCAG hardening (parallel with M6):**
+Same repo (`STATDOCTOR_BLOGPOSTING/`), not website. Backend SEO-agent changes (`reviewedBy`, `citation`, `publicationType`, news-only `Speakable`) + Schemar CI action + axe-core Playwright pass. Bar: JSON-LD validates green via Schemar against ≥3 sample articles; axe-core finds zero AA-level violations on the admin dashboard.
+
+Sources consulted (representative): `schema.org/MedicalScholarlyArticle`, `developers.google.com/search/docs/appearance/structured-data/speakable`, `accessibility.org.au/australia-formally-adopts-wcag-2-2-level-aa/`, `perplexity.ai/hub/blog/announcing-premium-health-sources`, `digitalapplied.com/blog/schema-markup-after-march-2026-structured-data-strategies`, `github.com/marketplace/actions/schemar-ci-action`.
+
 ### M0 → M1 handover items (defer until after M1 unless they block)
 - Pre-existing `e2e/admin-flow.spec.ts` cookie regression (M0.T5 finding)
 - `/login` form ↔ `admin_token` cookie disconnect (M0.T5 finding)
