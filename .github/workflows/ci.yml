@@ -19,11 +19,11 @@ jobs:
         working-directory: extracted
       - run: pnpm exec tsc --noEmit
         working-directory: extracted
-      # Green-bar check: run tests without coverage enforcement until M0.T10
+      # Blocking gate: fails fast on test failure with no coverage overhead.
       - run: pnpm test
         working-directory: extracted
-      # Coverage report: informational only until M0.T10 backfill complete
-      # TODO(M0.T10): re-enable coverage thresholds once backfill complete
+      # Informational coverage report (continue-on-error: true) — thresholds
+      # become blocking in M0.T10 once backfill is complete.
       - run: pnpm exec vitest run --coverage --reporter=verbose
         working-directory: extracted
         continue-on-error: true
