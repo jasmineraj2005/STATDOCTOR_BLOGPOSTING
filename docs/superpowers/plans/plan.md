@@ -93,16 +93,16 @@ Live status, kept in sync with each task. New entries appended at the bottom. Br
 | M0.T5 — Sunday-review e2e specs | ✅ DONE_WITH_CONCERNS | `be9ac61` (Tier A) `66da689` (Tier B fixme) | 6 Tier-A specs passing: `admin-auth` (2), `validator-gate`, `concurrent-approve`, `queue-rendering`, `edit-then-approve`. 5 Tier-B `test.fixme` skeletons placed: `sunday-signin`, `sunday-batch-25min`, `publish-fail`, `retry-publish`, `seo-dashboard`. **Carry-overs surfaced (do not block M0):** (a) pre-existing `e2e/admin-flow.spec.ts` is failing because it never set the `admin_token` cookie — needs a separate `setAdminCookie` patch; (b) `/login` form is disconnected from `admin_token` cookie — login form pushes to `/dashboard` but never sets the auth cookie; (c) magic-link wording in plan was speculative — current auth is cookie-based. |
 | M0.T6 — Backend agent pytest | ✅ DONE | `623998e` `640ca9e` `ec8b362` `7e82eea` `700f385` | 128 tests, 0 failures. Per-agent coverage: intelligence 100%, researcher 95%, writer 100%, seo 98%, ahpra 98%. LLM calls mocked at `client.chat.completions.create` boundary; httpx calls mocked at `httpx.get`. M1 concerns: `datetime.utcnow()` deprecated in 3 agents (intelligence, writer, seo); `researcher.py` million-multiplier regex branch uncovered. |
 | M0.T7 — Source-adapter pytest | ✅ N/A | — | The `backend/sources/{guardian,…}.py` adapter pattern from `BLOG_AGENT.md` was planned but **never built**. Source fetching is inline in `agents/researcher.py` + `agents/intelligence.py`, which M0.T6 already covers (38 tests, ≥95% coverage). If the adapter pattern is built later (e.g., to refactor `validation/urls.py` integration in M1), tests follow then. |
-| M0.T8 — SEO parser tests | ⏳ Next | — | — |
-| M0.T9 — Health endpoint contract | ⏳ Pending | — | — |
-| M0.T10 — Chaos / recovery tests | ⏳ Pending | — | — |
+| M0.T8 — SEO parser tests | ✅ DONE_WITH_CONCERNS | `a6444d8` `43f2f4e` `642540b` | 44 tests, 5 skipped. Extracted `parseGscRows`, `parseBingRows`, `bucketPosition`, `aggregateByDay` from inline closures for testability — no behaviour change. Coverage: gsc 88%, bing 97%, aggregate 53% (3 skipped `getOverview`/`getKeywordTracker`/`getArticlePerformance` need real Postgres — pg-mem rejects `date::text`, correlated subqueries, and `ROW_NUMBER() OVER`). Overall `lib/seo/**` 75% — below the 90% threshold. M0.T10 decides whether to enforce thresholds or carry the gap into M3 (real Postgres in CI). |
+| M0.T9 — Health endpoint contract | ✅ DONE | `efb265f` | 6 tests covering every documented failure mode: db_not_configured, db_unreachable, cron_last_run_failed, cron_stale, no_cron_runs_yet, all_crons_fresh. Mocks `sql` + `isDbConfigured` at module boundary. Existing implementation matched the spec on first run — tests lock in the contract. |
+| M0.T10 — Chaos / recovery tests | ⏳ Next | — | — |
 
 ### Open follow-ups (after M0)
 - Fix `e2e/admin-flow.spec.ts` to set `admin_token` cookie (pre-existing failure, surfaced by M0.T5).
 - Reconcile `/login` form with `admin_token` cookie (currently disjoint — login flow doesn't actually authorise the admin gate).
 
 ### Test counts as of last task
-- Vitest: **79 passing** (was 38 at start of M0).
+- Vitest: **124 passing, 5 skipped** across 10 files (was 38 at start of M0).
 - Playwright: 6 Tier-A specs passing + 2 pre-existing specs failing (carry-over) + 5 fixme.
 - Pytest: **128 passing** across 6 test files: `test_ahpra.py`, `test_ahpra_supplemental.py`, `test_intelligence.py`, `test_researcher.py`, `test_writer.py`, `test_seo.py`. Agent coverage ≥95% on all 5.
 
