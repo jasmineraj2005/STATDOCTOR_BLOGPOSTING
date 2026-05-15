@@ -145,8 +145,11 @@ export async function claimForApproval(slug: string): Promise<PostFile | null> {
            last_reviewed_at = ${now},
            date_modified    = ${now},
            data             = jsonb_set(
-                                jsonb_set(data, '{status}', '"scheduled"'),
-                                '{last_reviewed_at}', to_jsonb(${now}::text)
+                                jsonb_set(
+                                  jsonb_set(data, '{status}', '"scheduled"'),
+                                  '{last_reviewed_at}', to_jsonb(${now}::text)
+                                ),
+                                '{dateModified}', to_jsonb(${now}::text)
                               )
      WHERE slug   = ${slug}
        AND status = 'pending_review'

@@ -46,8 +46,8 @@ memDb.public.registerFunction({
   name: "to_jsonb",
   args: [DataType.text],
   returns: DataType.jsonb,
-  // pg-mem passes the text value directly; return it as-is (it will be stored as JSONB).
-  implementation: (v: unknown) => v,
+  // pg-mem passes the text value directly; return JSON-encoded form for JSONB storage.
+  implementation: (v: unknown): string => JSON.stringify(v),
 });
 
 const { Pool: MemPool } = memDb.adapters.createPg() as { Pool: new () => PgPool };
@@ -170,5 +170,25 @@ describe("claimForApproval", () => {
   it("claimForApproval_returns_null_for_nonexistent_slug", async () => {
     const result = await claimForApproval("slug-that-does-not-exist");
     expect(result).toBeNull();
+  });
+
+  it("claimForApproval_dateModified_in_jsonb_matches_last_reviewed_at", async () => {
+    const slug = "claim-test-datemodified";
+    await insertPendingPost(slug);
+
+    const before = Date.now();
+    const result = await claimForApproval(slug);
+    const after = Date.now();
+
+    expect(result).not.toBeNull();
+    // dateModified in the JSONB blob must be present and parse to a time
+    // within the window of the claimForApproval call.
+    const dm = result!.post.dateModified;
+    expect(dm).toBeTruthy();
+    const dmMs = new Date(dm as string).getTime();
+    expect(dmMs).toBeGreaterThanOrEqual(before - 1000); // 1s slack for pg-mem string handling
+    expect(dmMs).toBeLessThanOrEqual(after + 1000);
+    // dateModified must equal last_reviewed_at inside the JSONB.
+    expect(result!.post.dateModified).toBe(result!.post.last_reviewed_at);
   });
 });

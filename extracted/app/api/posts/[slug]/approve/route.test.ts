@@ -19,8 +19,8 @@ const {
   mockLogAudit,
   mockIsAuthorised,
 } = vi.hoisted(() => ({
-  mockGetPostBySlug: vi.fn<[string], Promise<PostFile | null>>(),
-  mockClaimForApproval: vi.fn<[string], Promise<PostFile | null>>(),
+  mockGetPostBySlug: vi.fn<(slug: string) => Promise<PostFile | null>>(),
+  mockClaimForApproval: vi.fn<(slug: string) => Promise<PostFile | null>>(),
   mockLogAudit: vi.fn(async () => {}),
   mockIsAuthorised: vi.fn(async () => true),
 }));
