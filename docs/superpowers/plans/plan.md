@@ -80,6 +80,34 @@ Dependencies: `M0 → {M1, M2, M3, M4, M5, M7}`; `M3 → M4` (the dashboard need
 
 ---
 
+## Execution Log — M0 Test Backfill (🟢 in progress)
+
+Live status, kept in sync with each task. New entries appended at the bottom. Branch: `rollback-to-pre-ui-redesign`.
+
+| Task | Status | Commits | Notes |
+|---|---|---|---|
+| M0.T1 — CI gates + coverage thresholds | ✅ DONE | `29870ab` → `980d151` (spec fix) → `44f7586` `c95364f` `1053081` `53fa5de` (quality fixes) | Three-suite CI (`vitest` blocking + `--coverage` informational, `playwright`, `pytest`) + coverage thresholds wired into `vitest.config.ts`. Meta-test `extracted/lib/check-coverage-config.test.ts` locks `pnpm test` + `OPENAI_API_KEY` env binding + anchored regex. Coverage thresholds will start blocking in M0.T10. |
+| M0.T2 — Validator coverage audit | ✅ DONE | `d6e77c1` | New `validators.coverage.test.ts` asserts positive + negative test per validator. Backfilled 2 gap tests in `validators.test.ts` for `banned_phrases` negative case (data-driven loop was invisible to regex). 65 tests passing. |
+| M0.T3 — Publish adapter tests | ✅ DONE | `4151dc1` | Refactored `publishToGitHub` to accept `opts: { fetcher, sleeper, maxRetries }`. Added 5xx retry with exponential backoff. 422/409 SHA conflict treated as success ("already exists"). Added `__mocks__/server-only.ts` shim + vitest alias to import server-only modules in Node tests. Public `publishPost(file)` signature unchanged; one production caller unaffected. The plan's "no-op when called twice with same key" deferred to M0.T4 (idempotency lives at approve layer). 71 tests. |
+| M0.T4 — Atomic approve | ✅ DONE | `8cb9d8d` → `5b12e19` (TS + JSONB drift fixes) | New `claimForApproval(slug)` in `store.ts` using single atomic `UPDATE … WHERE status='pending_review' RETURNING …`. Postgres row-locks handle concurrency. `approve/route.ts` rewritten to read → validate (pure) → claim → 409-if-null → audit → redirect. pg-mem-backed store tests + 4 route tests. 79 tests passing, `tsc --noEmit` clean (3 pre-existing component errors only). |
+| M0.T5 — Sunday-review e2e specs | ✅ DONE_WITH_CONCERNS | `be9ac61` (Tier A) `66da689` (Tier B fixme) | 6 Tier-A specs passing: `admin-auth` (2), `validator-gate`, `concurrent-approve`, `queue-rendering`, `edit-then-approve`. 5 Tier-B `test.fixme` skeletons placed: `sunday-signin`, `sunday-batch-25min`, `publish-fail`, `retry-publish`, `seo-dashboard`. **Carry-overs surfaced (do not block M0):** (a) pre-existing `e2e/admin-flow.spec.ts` is failing because it never set the `admin_token` cookie — needs a separate `setAdminCookie` patch; (b) `/login` form is disconnected from `admin_token` cookie — login form pushes to `/dashboard` but never sets the auth cookie; (c) magic-link wording in plan was speculative — current auth is cookie-based. |
+| M0.T6 — Backend agent pytest | ⏳ Next | — | — |
+| M0.T7 — Source-adapter pytest | ⏳ Pending | — | — |
+| M0.T8 — SEO parser tests | ⏳ Pending | — | — |
+| M0.T9 — Health endpoint contract | ⏳ Pending | — | — |
+| M0.T10 — Chaos / recovery tests | ⏳ Pending | — | — |
+
+### Open follow-ups (after M0)
+- Fix `e2e/admin-flow.spec.ts` to set `admin_token` cookie (pre-existing failure, surfaced by M0.T5).
+- Reconcile `/login` form with `admin_token` cookie (currently disjoint — login flow doesn't actually authorise the admin gate).
+
+### Test counts as of last task
+- Vitest: **79 passing** (was 38 at start of M0).
+- Playwright: 6 Tier-A specs passing + 2 pre-existing specs failing (carry-over) + 5 fixme.
+- Pytest: 1 file `test_ahpra.py` (M0.T6 will expand).
+
+---
+
 ## Test Plan (canonical — owned by this section)
 
 This is the single source of truth for what we test, where, and the bars we hold. Every milestone's "DoD" line points back to entries here.
