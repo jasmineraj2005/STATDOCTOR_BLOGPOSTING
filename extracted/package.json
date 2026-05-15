@@ -88,11 +88,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.6",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "1.3.3",
     "typescript": "^5",
-    "vitest": "^4.1.6",
-    "@vitest/coverage-v8": "^4.1.6"
+    "vitest": "^4.1.6"
   }
 }
