@@ -122,6 +122,40 @@ export async function getPostBySlug(slug: string): Promise<PostFile | null> {
   return fsGetBySlug(slug);
 }
 
+/**
+ * Atomically transition a post from 'pending_review' → 'scheduled'.
+ *
+ * Uses a single SQL UPDATE … WHERE status='pending_review' RETURNING so that
+ * Postgres's row-level locking guarantees only one concurrent caller gets the
+ * row back. The second concurrent caller sees rowCount=0 and returns null.
+ *
+ * Returns the updated PostFile if the row was claimed, null if the post did not
+ * exist OR was already claimed (status ≠ 'pending_review').
+ *
+ * FS-only mode: throws — this operation cannot be made atomic on the filesystem.
+ */
+export async function claimForApproval(slug: string): Promise<PostFile | null> {
+  if (!isDbConfigured()) {
+    throw new Error("claimForApproval requires DB; cannot run in fs-only mode");
+  }
+  const now = new Date().toISOString();
+  const { rows } = await sql<Row>`
+    UPDATE posts
+       SET status           = 'scheduled',
+           last_reviewed_at = ${now},
+           date_modified    = ${now},
+           data             = jsonb_set(
+                                jsonb_set(data, '{status}', '"scheduled"'),
+                                '{last_reviewed_at}', to_jsonb(${now}::text)
+                              )
+     WHERE slug   = ${slug}
+       AND status = 'pending_review'
+     RETURNING slug, filename, status, pillar, content_type, word_count, ahpra_passed,
+               generated_at, date_modified, last_reviewed_at, data
+  `;
+  return rows.length ? rowToFile(rows[0]) : null;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Writes
 // ──────────────────────────────────────────────────────────────────────────────
