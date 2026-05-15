@@ -1,0 +1,32 @@
+{
+  "rows": [
+    {
+      "keys": ["locum doctor pay rates australia", "https://statdoctor.app/blog/locum-pay-rates", "aus", "DESKTOP"],
+      "clicks": 42,
+      "impressions": 850,
+      "ctr": 0.0494,
+      "position": 2.3
+    },
+    {
+      "keys": ["ahpra registration renewal", "https://statdoctor.app/blog/ahpra-renewal", "aus", "MOBILE"],
+      "clicks": 17,
+      "impressions": 430,
+      "ctr": 0.0395,
+      "position": 8.7
+    },
+    {
+      "keys": ["medical indemnity insurance australia", "https://statdoctor.app/blog/medical-indemnity", "aus", "DESKTOP"],
+      "clicks": 5,
+      "impressions": 210,
+      "ctr": 0.0238,
+      "position": 14.2
+    },
+    {
+      "keys": ["", "https://statdoctor.app/blog/something", "aus", "TABLET"],
+      "clicks": 0,
+      "impressions": 50,
+      "ctr": 0,
+      "position": 22.0
+    }
+  ]
+}

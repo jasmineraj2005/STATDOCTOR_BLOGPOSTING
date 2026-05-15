@@ -21,8 +21,42 @@ export type GscFetchSummary = {
   detail: string;
 };
 
+export type GscSnapshotRow = {
+  date: string;
+  query: string;
+  page: string;
+  country: string;
+  device: string;
+  clicks: number;
+  impressions: number;
+  position: number;
+};
+
 function ymd(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Pure parser: converts raw GSC API rows into snapshot rows ready for DB upsert.
+ * Exported so it can be unit-tested independently of the API / DB layer.
+ */
+export function parseGscRows(
+  rows: webmasters_v3.Schema$ApiDataRow[],
+  date: string,
+): GscSnapshotRow[] {
+  return rows.map((r) => {
+    const [query = "", page = "", country = "", device = ""] = r.keys ?? [];
+    return {
+      date,
+      query: query ?? "",
+      page: page ?? "",
+      country: country ?? "",
+      device: device ?? "",
+      clicks: Math.round(r.clicks ?? 0),
+      impressions: Math.round(r.impressions ?? 0),
+      position: r.position ?? 0,
+    };
+  });
 }
 
 export async function fetchGscYesterday(): Promise<GscFetchSummary> {
@@ -74,28 +108,29 @@ export async function fetchGscYesterday(): Promise<GscFetchSummary> {
     return { ok: false, date, rows: 0, detail: `GSC API error: ${msg}` };
   }
 
-  const rows = resp.rows ?? [];
-  if (rows.length === 0) {
+  const apiRows = resp.rows ?? [];
+  if (apiRows.length === 0) {
     return { ok: true, date, rows: 0, detail: "No rows for this date (GSC has a 2-3 day delay)" };
   }
 
+  const parsed = parseGscRows(apiRows, date);
+
   // Upsert in chunks of 200 to avoid massive single statements.
   let upserted = 0;
-  for (let i = 0; i < rows.length; i += 200) {
-    const chunk = rows.slice(i, i + 200);
+  for (let i = 0; i < parsed.length; i += 200) {
+    const chunk = parsed.slice(i, i + 200);
     for (const r of chunk) {
-      const [query, page, country, device] = r.keys ?? ["", "", "", ""];
       await sql`
         INSERT INTO gsc_daily_snapshot (date, query, page, country, device, clicks, impressions, position)
         VALUES (
-          ${date},
-          ${query ?? ""},
-          ${page ?? ""},
-          ${country ?? ""},
-          ${device ?? ""},
-          ${Math.round(r.clicks ?? 0)},
-          ${Math.round(r.impressions ?? 0)},
-          ${r.position ?? 0}
+          ${r.date},
+          ${r.query},
+          ${r.page},
+          ${r.country},
+          ${r.device},
+          ${r.clicks},
+          ${r.impressions},
+          ${r.position}
         )
         ON CONFLICT (date, query, page, country, device) DO UPDATE SET
           clicks      = EXCLUDED.clicks,
