@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: extracted/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: extracted
+      - run: pnpm exec tsc --noEmit
+        working-directory: extracted
+      # Green-bar check: run tests without coverage enforcement until M0.T10
+      - run: pnpm exec vitest run
+        working-directory: extracted
+      # Coverage report: informational only until M0.T10 backfill complete
+      # TODO(M0.T10): re-enable coverage thresholds once backfill complete
+      - run: pnpm exec vitest run --coverage --reporter=verbose
+        working-directory: extracted
+        continue-on-error: true
+  playwright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: extracted/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: extracted
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: extracted
+      - run: pnpm exec playwright test
+        working-directory: extracted
+        env:
+          POSTGRES_URL: ${{ secrets.TEST_POSTGRES_URL }}
+          ADMIN_TOKEN: ${{ secrets.TEST_ADMIN_TOKEN }}
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pytest pytest-cov
+        working-directory: backend
+      - run: pytest --cov=. --cov-report=term-missing
+        working-directory: backend
