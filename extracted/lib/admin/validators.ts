@@ -26,6 +26,7 @@ type ValidatorsConfig = {
   bad_anchor_patterns: string[];
   callout_floors: Record<ContentType, number>;
   word_floors: Record<ContentType, number>;
+  word_ceilings: Record<ContentType, number>;
   pay_disclaimer_triggers: string[];
   authoritative_domains: string[];
 };
@@ -168,11 +169,25 @@ export function runValidators(post: Post): ValidationResult[] {
   });
 
   const floor = cfg.word_floors[post.content_type] ?? 1500;
+  const ceiling = cfg.word_ceilings[post.content_type] ?? 2500;
+  const wc = post.word_count;
+  let wcStatus: ValidationStatus;
+  let wcDetail: string;
+  if (wc < floor) {
+    wcStatus = "fail";
+    wcDetail = `${wc} words — below floor for ${post.content_type} (${floor})`;
+  } else if (wc > ceiling) {
+    wcStatus = "warn";
+    wcDetail = `${wc} words — above ceiling for ${post.content_type} (${ceiling})`;
+  } else {
+    wcStatus = "pass";
+    wcDetail = `${wc} words — within band for ${post.content_type} (${floor}-${ceiling})`;
+  }
   results.push({
     check: "word_count",
     label: "Word count",
-    status: post.word_count >= floor ? "pass" : "warn",
-    detail: `${post.word_count} words (floor for ${post.content_type}: ${floor}).`,
+    status: wcStatus,
+    detail: wcDetail,
   });
 
   const hosts = post.sources.map((s) => hostnameOf(s.url)).filter(Boolean);
