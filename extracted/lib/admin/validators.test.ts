@@ -215,13 +215,52 @@ describe("Word count", () => {
     expect(result(makePost({ content_type: "guide", word_count: 1500 }), "word_count").status)
       .toBe("pass");
   });
-  it("warns guide under floor", () => {
+  it("fails guide under floor", () => {
     expect(result(makePost({ content_type: "guide", word_count: 1200 }), "word_count").status)
-      .toBe("warn");
+      .toBe("fail");
   });
   it("passes company at floor (1000)", () => {
     expect(result(makePost({ content_type: "company", word_count: 1000 }), "word_count").status)
       .toBe("pass");
+  });
+
+  it("words validator fails when below floor for content_type=news", () => {
+    const r = result(makePost({ content_type: "news", word_count: 1000 }), "word_count");
+    expect(r.status).toBe("fail");
+    expect(r.detail).toMatch(/below floor/i);
+  });
+
+  it("words validator warns when above ceiling", () => {
+    const r = result(makePost({ content_type: "news", word_count: 2500 }), "word_count");
+    expect(r.status).toBe("warn");
+    expect(r.detail).toMatch(/above ceiling/i);
+  });
+
+  it("words validator passes within band for guide", () => {
+    const r = result(makePost({ content_type: "guide", word_count: 1800 }), "word_count");
+    expect(r.status).toBe("pass");
+  });
+
+  // Boundary tests at floor & ceiling exact values:
+  it.each([
+    ["news",    1499, "fail"],
+    ["news",    1500, "pass"],
+    ["news",    2000, "pass"],
+    ["news",    2001, "warn"],
+    ["guide",   1499, "fail"],
+    ["guide",   1500, "pass"],
+    ["guide",   2500, "pass"],
+    ["guide",   2501, "warn"],
+    ["company",  999, "fail"],
+    ["company", 1000, "pass"],
+    ["company", 1800, "pass"],
+    ["company", 1801, "warn"],
+  ])("word_count boundary: %s @ %d words → %s", (contentType, words, expected) => {
+    const r = result(
+      makePost({ content_type: contentType as "news" | "guide" | "company", word_count: words }),
+      "word_count",
+    );
+    expect(r.status).toBe(expected);
   });
 });
 

@@ -38,6 +38,12 @@
     "company": 1000
   },
 
+  "word_ceilings": {
+    "news": 2000,
+    "guide": 2500,
+    "company": 1800
+  },
+
   "pay_disclaimer_triggers": [
     "pay rate", "hourly rate", "daily rate", "annual salary", "earn", "income", "remuneration"
   ],
