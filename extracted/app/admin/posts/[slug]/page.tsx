@@ -9,6 +9,7 @@ import {
   REJECTION_LABELS,
   type RejectionCode,
 } from "@/lib/admin/types";
+import ArticlePreviewPane from "@/components/article-preview-pane";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -69,7 +70,7 @@ export default async function PostEditPage({
         </div>
 
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
-          {/* Left: preview + edit form */}
+          {/* Left: edit form */}
           <section>
             <h2 className="eyebrow text-muted mb-3">Content (markdown)</h2>
             <form action={`/api/posts/${post.slug}/edit`} method="POST" className="space-y-4">
@@ -126,6 +127,14 @@ export default async function PostEditPage({
               <RejectionHistory entries={post.rejection_history} />
             )}
           </aside>
+        </div>
+
+        {/* ── Article Preview Pane ────────────────────────────────────────── */}
+        {/* Full-width below the editor+validator grid. White background matches
+            the public site reading view. Read-only — no editable controls. */}
+        <div className="mt-10">
+          <h2 className="eyebrow text-muted mb-3">Rendered Preview</h2>
+          <ArticlePreviewPane post={post} />
         </div>
       </div>
     </main>
