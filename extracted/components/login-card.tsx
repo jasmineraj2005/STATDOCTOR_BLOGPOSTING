@@ -3,28 +3,46 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
-const VALID_USERS: Array<{ email: string; password: string }> = [
-  { email: "anu@statdoctor.au", password: "statdoctor@1" },
-  { email: "test@statdoctor.au", password: "test@1" },
-]
-
 export default function LoginCard() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
-    const match = VALID_USERS.some(
-      (u) => u.email === email && u.password === password
-    )
-    if (match) {
-      router.push("/dashboard")
-    } else {
-      setError("Invalid email or password. Please try again.")
+    setSubmitting(true)
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        redirect?: string
+        error?: string
+        detail?: string
+      }
+      if (res.ok && data.ok) {
+        // Hard navigation so server components re-read the cookie cleanly.
+        window.location.href = data.redirect ?? "/admin/posts"
+        return
+      }
+      if (res.status === 401) {
+        setError("Invalid email or password. Please try again.")
+      } else if (data.detail) {
+        setError(`Sign-in unavailable: ${data.detail}`)
+      } else {
+        setError("Something went wrong. Try again in a moment.")
+      }
+    } catch {
+      setError("Network error. Check your connection and retry.")
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -153,10 +171,11 @@ export default function LoginCard() {
           {/* Submit */}
           <button
             type="submit"
-            className="mt-2 w-full py-2.5 rounded-lg text-sm font-medium text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
+            disabled={submitting}
+            className="mt-2 w-full py-2.5 rounded-lg text-sm font-medium text-white transition-all duration-200 hover:opacity-90 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
             style={{ background: "linear-gradient(135deg, #8b5cf6, #1e1b4b)" }}
           >
-            Sign in
+            {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
 

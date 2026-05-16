@@ -24,12 +24,12 @@ test.describe("CEO review flow", () => {
   test("queue → edit page → Approve & Publish → status flips to 'scheduled'", async ({ page }) => {
     // 1. Queue page shows the seeded article.
     await page.goto("/admin/posts");
-    await expect(page.locator("h1")).toContainText("Posts review queue");
+    await expect(page.locator("h1")).toContainText(/Posts (to review|review queue)/);
     await expect(page.getByText("Locum Work in Sydney — Playwright Test")).toBeVisible();
-    await expect(page.getByText(/All validators green/)).toBeVisible();
+    await expect(page.getByText(/All 8 checks pass|All validators green/)).toBeVisible();
 
-    // 2. Open the edit page.
-    await page.getByRole("link", { name: "REVIEW" }).first().click();
+    // 2. Open the edit page via the "EDIT" link on the queue row.
+    await page.getByRole("link", { name: "EDIT" }).first().click();
     await expect(page).toHaveURL(new RegExp(`/admin/posts/${SLUG}$`));
 
     // 3. Validator panel renders all 8 checks; Approve button is enabled.

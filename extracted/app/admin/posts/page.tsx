@@ -19,6 +19,7 @@ export default async function PostsQueue() {
     getPendingPosts(),
     getAllPosts(),
   ]);
+  const scheduled = all.filter((f) => f.post.status === "scheduled");
   const published = all.filter((f) => f.post.status === "published");
   const rejected = all.filter((f) => f.post.status === "rejected");
 
@@ -29,6 +30,7 @@ export default async function PostsQueue() {
         <h1 className="display text-4xl md:text-5xl mb-2">Posts review queue</h1>
         <p className="text-muted text-sm mb-8">
           <span className="font-medium text-ink">{pending.length}</span> pending ·{" "}
+          <span>{scheduled.length}</span> scheduled ·{" "}
           <span>{published.length}</span> published ·{" "}
           <span>{rejected.length}</span> rejected
         </p>
@@ -36,8 +38,10 @@ export default async function PostsQueue() {
         {pending.length === 0 ? (
           <div className="py-20 text-center rounded-2xl border border-dashed border-ink/15">
             <p className="display text-2xl text-muted italic">
-              Nothing to review. Generate a new article with{" "}
-              <span className="mono text-sm">python main.py</span>.
+              Nothing to review.
+            </p>
+            <p className="text-muted text-sm mt-3">
+              Next pipeline run drops articles here on Mon/Wed/Fri/Sat at 14:00 UTC.
             </p>
           </div>
         ) : (
@@ -48,28 +52,43 @@ export default async function PostsQueue() {
           </ul>
         )}
 
+        {scheduled.length > 0 && (
+          <FoldSection title={`Scheduled (${scheduled.length}) — next publish slot Tue/Wed/Fri/Sun`}>
+            {scheduled.map((f) => (
+              <RowLite
+                key={f.filename}
+                title={f.post.title}
+                slug={f.post.slug}
+                meta={`approved ${new Date(f.post.last_reviewed_at ?? f.post.generated_at).toLocaleString("en-AU")}`}
+              />
+            ))}
+          </FoldSection>
+        )}
+
         {published.length > 0 && (
-          <details className="mt-12">
-            <summary className="cursor-pointer eyebrow text-ocean">
-              Recently published ({published.length})
-            </summary>
-            <ul className="mt-4 space-y-2 text-sm">
-              {published.slice(0, 10).map((f) => (
-                <li
-                  key={f.filename}
-                  className="flex items-center justify-between px-4 py-2 rounded-lg bg-white border border-ink/10"
-                >
-                  <span className="truncate">{f.post.title}</span>
-                  <Link
-                    href={`/admin/posts/${f.post.slug}`}
-                    className="mono text-[10px] tracking-widest text-ocean hover:underline"
-                  >
-                    VIEW →
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </details>
+          <FoldSection title={`Recently published (${published.length})`}>
+            {published.slice(0, 10).map((f) => (
+              <RowLite
+                key={f.filename}
+                title={f.post.title}
+                slug={f.post.slug}
+                meta={new Date(f.post.dateModified ?? f.post.generated_at).toLocaleString("en-AU")}
+              />
+            ))}
+          </FoldSection>
+        )}
+
+        {rejected.length > 0 && (
+          <FoldSection title={`Rejected (${rejected.length})`}>
+            {rejected.slice(0, 10).map((f) => (
+              <RowLite
+                key={f.filename}
+                title={f.post.title}
+                slug={f.post.slug}
+                meta={f.post.rejection_history?.[f.post.rejection_history.length - 1]?.code ?? "—"}
+              />
+            ))}
+          </FoldSection>
         )}
       </div>
     </main>
@@ -95,38 +114,104 @@ function QueueRow({ file }: { file: PostFile }) {
           </span>
           <span className="mono text-[10px] text-muted">{post.word_count} words</span>
         </div>
-        <h3 className="display text-xl leading-tight">{post.title}</h3>
+        <Link
+          href={`/admin/posts/${post.slug}`}
+          className="display text-xl leading-tight hover:text-ocean transition-colors"
+        >
+          {post.title}
+        </Link>
         <p className="mt-1 text-sm text-muted line-clamp-2">{post.tldr}</p>
         <div className="mt-2 flex items-center gap-3 text-[11px]">
           {fails > 0 ? (
-            <span className="text-red-600">{fails} validator fail{fails > 1 ? "s" : ""}</span>
+            <span className="text-red-600">
+              {fails} validator fail{fails > 1 ? "s" : ""}
+            </span>
           ) : (
             <span className="text-leaf">All validators green</span>
           )}
-          {warns > 0 && <span className="text-muted">· {warns} warning{warns > 1 ? "s" : ""}</span>}
+          {warns > 0 && (
+            <span className="text-muted">
+              · {warns} warning{warns > 1 ? "s" : ""}
+            </span>
+          )}
           <span className="text-muted mono">
             · {new Date(post.generated_at).toLocaleString("en-AU")}
           </span>
         </div>
       </div>
       <div className="flex gap-2 shrink-0">
+        <form action={`/api/posts/${post.slug}/approve`} method="POST">
+          <button
+            type="submit"
+            disabled={!approvable}
+            className="px-4 py-2 rounded-full bg-ocean text-white mono text-[10px] tracking-widest hover:bg-ink transition-colors disabled:bg-ink/15 disabled:text-ink/40 disabled:cursor-not-allowed"
+            title={
+              approvable
+                ? "Schedule for publish (next Tue/Wed/Fri/Sun slot)"
+                : "Fix validators on the Edit page first"
+            }
+          >
+            ACCEPT
+          </button>
+        </form>
         <Link
           href={`/admin/posts/${post.slug}`}
-          className="px-4 py-2 rounded-full bg-ocean text-white mono text-[10px] tracking-widest hover:bg-ink transition-colors"
+          className="px-4 py-2 rounded-full bg-white border border-ink/30 text-ink mono text-[10px] tracking-widest hover:bg-ink hover:text-white transition-colors"
         >
-          REVIEW
+          EDIT
         </Link>
-        {approvable && (
-          <form action={`/api/posts/${post.slug}/approve`} method="POST">
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-full bg-electric text-ink mono text-[10px] tracking-widest hover:bg-ink hover:text-white transition-colors"
-            >
-              QUICK APPROVE
-            </button>
-          </form>
-        )}
+        <form action={`/api/posts/${post.slug}/reject`} method="POST">
+          <input type="hidden" name="reason_code" value="other" />
+          <input
+            type="hidden"
+            name="reason_text"
+            value="Dismissed from queue row."
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-full bg-white border border-ink/20 text-ink mono text-[10px] tracking-widest hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"
+          >
+            DISMISS
+          </button>
+        </form>
       </div>
+    </li>
+  );
+}
+
+function FoldSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="mt-12">
+      <summary className="cursor-pointer eyebrow text-ocean">{title}</summary>
+      <ul className="mt-4 space-y-2 text-sm">{children}</ul>
+    </details>
+  );
+}
+
+function RowLite({
+  title,
+  slug,
+  meta,
+}: {
+  title: string;
+  slug: string;
+  meta: string;
+}) {
+  return (
+    <li className="flex items-center justify-between px-4 py-2 rounded-lg bg-white border border-ink/10">
+      <Link
+        href={`/admin/posts/${slug}`}
+        className="truncate text-ink hover:text-ocean"
+      >
+        {title}
+      </Link>
+      <span className="mono text-[10px] text-muted">{meta}</span>
     </li>
   );
 }
