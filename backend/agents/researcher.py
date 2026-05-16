@@ -5,6 +5,11 @@ Given a TopicBrief, gathers:
 - 5-8 citable sources (Guardian articles + well-known AU health bodies)
 - An Unsplash hero image
 - Relevant AHPRA compliance context for the topic
+
+M1.T6 additions:
+- Calls validate_sources after dedupe; drops off-whitelist / 404 URLs.
+- Re-broadens up to MAX_REBROADEN_RETRIES times if post-filter count < MIN_OK_SOURCES.
+- Tracks total LLM token spend per topic; aborts if it exceeds BUDGET_TOKENS_PER_TOPIC.
 """
 
 import json
@@ -27,8 +32,15 @@ from config import (
     OUTPUT_DIR,
 )
 from models import ResearchBrief, Source, TopicBrief
+from validation.urls import validate_sources
 
 USED_IMAGES_LOG = OUTPUT_DIR / "used_images.json"
+
+# ── tunable constants ─────────────────────────────────────────────────────────
+
+BUDGET_TOKENS_PER_TOPIC: int = int(os.getenv("RESEARCHER_BUDGET_TOKENS", "50000"))
+MIN_OK_SOURCES: int = 5
+MAX_REBROADEN_RETRIES: int = 2
 
 
 def _build_chart_url(statistics: list[str], topic_title: str) -> str | None:
@@ -169,26 +181,29 @@ def _fetch_unsplash_image(
     return None, None, None
 
 
-def research_topic(topic: TopicBrief) -> ResearchBrief:
-    """Gather facts, sources, and a hero image for the given topic."""
-    print(f"[Researcher] Researching: {topic.title}")
+def _sources_to_dicts(sources: list[Source]) -> list[dict]:
+    """Convert Source model instances to plain dicts for validate_sources."""
+    return [{"url": s.url, "title": s.title, "publisher": s.publisher, "snippet": s.snippet}
+            for s in sources]
 
-    # Pull Guardian articles for context
-    search_query = " ".join(topic.target_keywords[:2]) + " Australia"
+
+def _gather_sources(
+    topic: TopicBrief,
+    search_query: str,
+    llm_additional: list[dict],
+    http_client: httpx.Client,
+) -> tuple[list[Source], list[dict]]:
+    """
+    Fetch Guardian results and merge with LLM-supplied additional_sources.
+    Returns (all_sources_as_Source_list, guardian_raw_results).
+    """
     guardian_results = _search_guardian(search_query)
 
-    guardian_snippets: list[str] = []
     guardian_sources: list[Source] = []
     for item in guardian_results[:6]:
         fields = item.get("fields", {})
         trail = fields.get("trailText") or ""
         body_preview = (fields.get("bodyText") or "")[:400]
-        guardian_snippets.append(
-            f"Title: {item['webTitle']}\n"
-            f"URL: {item['webUrl']}\n"
-            f"Preview: {trail}\n"
-            f"{body_preview}"
-        )
         guardian_sources.append(
             Source(
                 title=item["webTitle"],
@@ -198,13 +213,82 @@ def research_topic(topic: TopicBrief) -> ResearchBrief:
             )
         )
 
-    snippets_text = (
-        "\n\n---\n\n".join(guardian_snippets)
-        if guardian_snippets
-        else "No Guardian articles retrieved — rely on your knowledge of Australian healthcare."
+    all_sources: list[Source] = list(guardian_sources)
+    for s in llm_additional[:5]:
+        all_sources.append(
+            Source(
+                title=s.get("title", ""),
+                url=s.get("url", ""),
+                publisher=s.get("publisher", ""),
+                snippet=s.get("snippet", ""),
+            )
+        )
+
+    return all_sources, guardian_results
+
+
+def _make_aborted_brief(topic: TopicBrief, reason: str) -> ResearchBrief:
+    """Return a sentinel brief signalling that research was aborted."""
+    return ResearchBrief(
+        topic=topic,
+        key_facts=[],
+        statistics=[],
+        sources=[],
+        ahpra_context="",
+        aborted=True,
+        abort_reason=reason,
     )
 
-    prompt = f"""You are a medical content researcher for StatDoctor (statdoctor.app), Australia's locum doctor marketplace.
+
+def research_topic(
+    topic: TopicBrief,
+    *,
+    http_client: httpx.Client | None = None,
+) -> ResearchBrief:
+    """Gather facts, sources, and a hero image for the given topic.
+
+    Parameters
+    ----------
+    topic:
+        The TopicBrief to research.
+    http_client:
+        Optional shared httpx.Client injected for testing.  When None a
+        short-lived client is created internally and closed on return.
+    """
+    print(f"[Researcher] Researching: {topic.title}")
+
+    budget = int(os.getenv("RESEARCHER_BUDGET_TOKENS", str(BUDGET_TOKENS_PER_TOPIC)))
+    total_tokens_used: int = 0
+
+    owns_http_client = http_client is None
+    if owns_http_client:
+        http_client = httpx.Client(follow_redirects=True, timeout=10)
+
+    try:
+        # ── Step 1: Pull Guardian articles + LLM research call ───────────────
+        search_query = " ".join(topic.target_keywords[:2]) + " Australia"
+
+        # Build Guardian snippets for the prompt (pre-validation, just for LLM context)
+        guardian_results_for_prompt = _search_guardian(search_query)
+        guardian_snippets: list[str] = []
+        for item in guardian_results_for_prompt[:6]:
+            fields = item.get("fields", {})
+            trail = fields.get("trailText") or ""
+            body_preview = (fields.get("bodyText") or "")[:400]
+            guardian_snippets.append(
+                f"Title: {item['webTitle']}\n"
+                f"URL: {item['webUrl']}\n"
+                f"Preview: {trail}\n"
+                f"{body_preview}"
+            )
+
+        snippets_text = (
+            "\n\n---\n\n".join(guardian_snippets)
+            if guardian_snippets
+            else "No Guardian articles retrieved — rely on your knowledge of Australian healthcare."
+        )
+
+        prompt = f"""You are a medical content researcher for StatDoctor (statdoctor.app), Australia's locum doctor marketplace.
 
 Research the following topic. Your knowledge of Australian healthcare (AHPRA, Medicare, AMA, AIHW, ABS, state health departments) is authoritative.
 
@@ -251,66 +335,159 @@ Rules:
 - Aim for 4-6 additional sources beyond Guardian articles
 - Statistics should reference: AIHW, ABS, DoH, AHPRA annual report, AMA, MJA where possible"""
 
-    response = client.chat.completions.create(
-        model=WRITER_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        temperature=0.3,
-    )
-
-    data = json.loads(response.choices[0].message.content)
-
-    # Merge sources
-    all_sources: list[Source] = list(guardian_sources)
-    for s in data.get("additional_sources", [])[:5]:
-        all_sources.append(
-            Source(
-                title=s.get("title", ""),
-                url=s.get("url", ""),
-                publisher=s.get("publisher", ""),
-                snippet=s.get("snippet", ""),
-            )
+        response = client.chat.completions.create(
+            model=WRITER_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.3,
         )
 
-    # Hero image from Unsplash
-    image_query = f"doctor Australia medical {topic.target_keywords[0]}"
-    image_url, image_credit, image_description = _fetch_unsplash_image(image_query)
-    if image_url:
-        print(f"  [Researcher] Hero image: {image_credit}")
-    else:
-        print("  [Researcher] No hero image (UNSPLASH_ACCESS_KEY missing or error)")
+        # ── Token budget check ────────────────────────────────────────────────
+        usage = getattr(response, "usage", None)
+        raw_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+        try:
+            call_tokens = int(raw_tokens)
+        except (TypeError, ValueError):
+            call_tokens = 0
+        total_tokens_used += call_tokens
 
-    # Additional inline images for mid-article placement
-    inline_queries = [
-        f"hospital workplace Australia {topic.pillar.value.replace('_', ' ')}",
-        f"medical professional {topic.target_keywords[-1] if topic.target_keywords else 'healthcare'}",
-    ]
-    inline_images: list[str] = []
-    for q in inline_queries:
-        url, _, _ = _fetch_unsplash_image(q)
-        if url:
-            inline_images.append(url)
-    print(f"  [Researcher] {len(inline_images)} inline images fetched")
+        if total_tokens_used > budget:
+            print(
+                f"  [Researcher] ABORTED topic={topic.title!r} "
+                f"tokens_used={total_tokens_used} budget={budget} status=budget_exceeded"
+            )
+            return _make_aborted_brief(topic, "budget_exceeded")
 
-    stats_list = data.get("statistics", [])
-    chart_url = _build_chart_url(stats_list, topic.title)
-    if chart_url:
-        print(f"  [Researcher] Chart generated for {len(stats_list)} statistics")
-    else:
-        print("  [Researcher] No chart generated (insufficient numeric stats)")
+        data = json.loads(response.choices[0].message.content)
 
-    brief = ResearchBrief(
-        topic=topic,
-        key_facts=data.get("key_facts", []),
-        statistics=stats_list,
-        sources=all_sources,
-        ahpra_context=data.get("ahpra_context", ""),
-        image_url=image_url,
-        image_credit=image_credit,
-        image_description=image_description,
-        chart_url=chart_url,
-        inline_images=inline_images,
-    )
+        # ── Step 2: Merge sources (Guardian + LLM additional) ─────────────────
+        # Build Guardian sources from the already-fetched results
+        guardian_sources: list[Source] = []
+        for item in guardian_results_for_prompt[:6]:
+            fields = item.get("fields", {})
+            trail = fields.get("trailText") or ""
+            body_preview = (fields.get("bodyText") or "")[:400]
+            guardian_sources.append(
+                Source(
+                    title=item["webTitle"],
+                    url=item["webUrl"],
+                    publisher="The Guardian",
+                    snippet=(trail or body_preview)[:250],
+                )
+            )
 
-    print(f"  [Researcher] {len(all_sources)} sources | {len(brief.key_facts)} facts | {len(brief.statistics)} stats")
-    return brief
+        all_sources: list[Source] = list(guardian_sources)
+        for s in data.get("additional_sources", [])[:5]:
+            all_sources.append(
+                Source(
+                    title=s.get("title", ""),
+                    url=s.get("url", ""),
+                    publisher=s.get("publisher", ""),
+                    snippet=s.get("snippet", ""),
+                )
+            )
+
+        # ── Step 3: validate_sources + re-broaden loop ────────────────────────
+        validated_sources: list[Source] = []
+        for retry in range(MAX_REBROADEN_RETRIES + 1):
+            source_dicts = _sources_to_dicts(all_sources)
+            val_result = validate_sources(source_dicts, http=http_client)
+
+            ok_dicts = val_result.ok_sources
+            validated_sources = [
+                Source(
+                    title=d.get("title", ""),
+                    url=d.get("url", ""),
+                    publisher=d.get("publisher", ""),
+                    snippet=d.get("snippet", ""),
+                )
+                for d in ok_dicts
+            ]
+
+            if len(validated_sources) >= MIN_OK_SOURCES:
+                break  # enough — proceed
+
+            if retry < MAX_REBROADEN_RETRIES:
+                # Re-broaden: widen the Guardian query and re-fetch
+                print(
+                    f"  [Researcher] Only {len(validated_sources)} valid sources after validation "
+                    f"(need {MIN_OK_SOURCES}), re-broadening (attempt {retry + 1}/{MAX_REBROADEN_RETRIES})…"
+                )
+                broad_query = " ".join(topic.target_keywords) + " Australia healthcare"
+                broad_results = _search_guardian(broad_query, n=12)
+                new_guardian: list[Source] = []
+                seen_urls = {s.url for s in all_sources}
+                for item in broad_results[:10]:
+                    url = item["webUrl"]
+                    if url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+                    fields = item.get("fields", {})
+                    trail = fields.get("trailText") or ""
+                    body_preview = (fields.get("bodyText") or "")[:400]
+                    new_guardian.append(
+                        Source(
+                            title=item["webTitle"],
+                            url=url,
+                            publisher="The Guardian",
+                            snippet=(trail or body_preview)[:250],
+                        )
+                    )
+                all_sources = all_sources + new_guardian
+            else:
+                # Exhausted retries
+                print(
+                    f"  [Researcher] ABORTED topic={topic.title!r} "
+                    f"valid_sources={len(validated_sources)} status=too_few_valid_sources"
+                )
+                return _make_aborted_brief(topic, "too_few_valid_sources")
+
+        # ── Step 4: Hero + inline images ──────────────────────────────────────
+        image_query = f"doctor Australia medical {topic.target_keywords[0]}"
+        image_url, image_credit, image_description = _fetch_unsplash_image(image_query)
+        if image_url:
+            print(f"  [Researcher] Hero image: {image_credit}")
+        else:
+            print("  [Researcher] No hero image (UNSPLASH_ACCESS_KEY missing or error)")
+
+        inline_queries = [
+            f"hospital workplace Australia {topic.pillar.value.replace('_', ' ')}",
+            f"medical professional {topic.target_keywords[-1] if topic.target_keywords else 'healthcare'}",
+        ]
+        inline_images: list[str] = []
+        for q in inline_queries:
+            url, _, _ = _fetch_unsplash_image(q)
+            if url:
+                inline_images.append(url)
+        print(f"  [Researcher] {len(inline_images)} inline images fetched")
+
+        stats_list = data.get("statistics", [])
+        chart_url = _build_chart_url(stats_list, topic.title)
+        if chart_url:
+            print(f"  [Researcher] Chart generated for {len(stats_list)} statistics")
+        else:
+            print("  [Researcher] No chart generated (insufficient numeric stats)")
+
+        brief = ResearchBrief(
+            topic=topic,
+            key_facts=data.get("key_facts", []),
+            statistics=stats_list,
+            sources=validated_sources,
+            ahpra_context=data.get("ahpra_context", ""),
+            image_url=image_url,
+            image_credit=image_credit,
+            image_description=image_description,
+            chart_url=chart_url,
+            inline_images=inline_images,
+        )
+
+        print(
+            f"  [Researcher] {len(validated_sources)} sources | "
+            f"{len(brief.key_facts)} facts | {len(brief.statistics)} stats | "
+            f"tokens={total_tokens_used} status=ok"
+        )
+        return brief
+
+    finally:
+        if owns_http_client:
+            http_client.close()

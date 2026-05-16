@@ -16,6 +16,7 @@ import sys
 import urllib.parse
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 os.environ.setdefault("OPENAI_API_KEY", "sk-test")
@@ -312,24 +313,37 @@ _RESEARCH_RESPONSE_JSON = json.dumps({
 })
 
 
+def _pass_through_validate(sources, *, http=None, sleeper=None):
+    """Default validate_sources stub: keeps all sources (no real HEAD checks)."""
+    from validation.urls import ValidationResult
+    return ValidationResult(
+        ok_sources=sources,
+        flags=[],
+        total_input=len(sources),
+        total_ok=len(sources),
+    )
+
+
 class TestResearchTopic:
+    @patch("agents.researcher.validate_sources", side_effect=_pass_through_validate)
     @patch("agents.researcher.client.chat.completions.create")
     @patch("agents.researcher.httpx.get")
     def test_returns_research_brief_with_expected_fields(
-        self, mock_get, mock_create, monkeypatch, tmp_path
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
     ):
         monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
         monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
         monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
 
-        # Guardian returns one article
+        # Guardian returns enough articles to pass the MIN_OK_SOURCES=5 gate.
         guardian_resp = MagicMock()
-        guardian_resp.json.return_value = {"response": {"results": _GUARDIAN_RESULTS}}
+        guardian_resp.json.return_value = {"response": {"results": _MANY_GUARDIAN_RESULTS}}
         guardian_resp.raise_for_status.return_value = None
         mock_get.return_value = guardian_resp
 
         mock_create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=_RESEARCH_RESPONSE_JSON))]
+            choices=[MagicMock(message=MagicMock(content=_RESEARCH_RESPONSE_JSON))],
+            usage=MagicMock(total_tokens=1000),
         )
 
         topic = _make_topic()
@@ -339,24 +353,27 @@ class TestResearchTopic:
         assert len(brief.key_facts) == 3
         assert len(brief.statistics) == 2
         assert len(brief.ahpra_context) > 0
-        # Guardian article + 1 additional source = 2 total sources
-        assert len(brief.sources) == 2
+        # Guardian articles + 1 additional source; at least 5 sources total
+        assert len(brief.sources) >= 5
 
+    @patch("agents.researcher.validate_sources", side_effect=_pass_through_validate)
     @patch("agents.researcher.client.chat.completions.create")
     @patch("agents.researcher.httpx.get")
     def test_chart_url_generated_when_statistics_have_numbers(
-        self, mock_get, mock_create, monkeypatch, tmp_path
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
     ):
-        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "")
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
         monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
         monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+        # Return enough Guardian articles to pass the MIN_OK_SOURCES gate.
         mock_get.return_value = MagicMock(
-            json=MagicMock(return_value={"response": {"results": []}}),
+            json=MagicMock(return_value={"response": {"results": _MANY_GUARDIAN_RESULTS}}),
             raise_for_status=MagicMock(return_value=None),
         )
 
         mock_create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=_RESEARCH_RESPONSE_JSON))]
+            choices=[MagicMock(message=MagicMock(content=_RESEARCH_RESPONSE_JSON))],
+            usage=MagicMock(total_tokens=1000),
         )
 
         topic = _make_topic()
@@ -365,22 +382,279 @@ class TestResearchTopic:
         assert brief.chart_url is not None
         assert "quickchart.io" in brief.chart_url
 
+    @patch("agents.researcher.validate_sources", side_effect=_pass_through_validate)
     @patch("agents.researcher.client.chat.completions.create")
     @patch("agents.researcher.httpx.get")
     def test_image_url_is_none_when_unsplash_key_missing(
-        self, mock_get, mock_create, monkeypatch, tmp_path
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
     ):
-        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "")
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
         monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
         monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+        # Return enough Guardian articles to pass the MIN_OK_SOURCES gate.
         mock_get.return_value = MagicMock(
-            json=MagicMock(return_value={"response": {"results": []}}),
+            json=MagicMock(return_value={"response": {"results": _MANY_GUARDIAN_RESULTS}}),
             raise_for_status=MagicMock(return_value=None),
         )
         mock_create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=_RESEARCH_RESPONSE_JSON))]
+            choices=[MagicMock(message=MagicMock(content=_RESEARCH_RESPONSE_JSON))],
+            usage=MagicMock(total_tokens=1000),
         )
 
         brief = research_topic(_make_topic())
         assert brief.image_url is None
         assert brief.image_credit is None
+
+
+# ── validate_sources integration ──────────────────────────────────────────────
+
+
+# Enough raw Guardian results so we clear the ≥5 threshold easily.
+_MANY_GUARDIAN_RESULTS = [
+    {
+        "id": f"society/00{i}",
+        "webTitle": f"Article {i}",
+        "webUrl": f"https://theguardian.com/00{i}",
+        "webPublicationDate": "2024-01-01T00:00:00Z",
+        "sectionName": "Society",
+        "fields": {"trailText": f"Trail {i}.", "bodyText": f"Body {i}."},
+    }
+    for i in range(1, 8)  # 7 Guardian results
+]
+
+
+def _make_ok_validation_result(sources):
+    """Return a ValidationResult where all sources pass."""
+    from validation.urls import ValidationResult
+    return ValidationResult(
+        ok_sources=sources,
+        flags=[],
+        total_input=len(sources),
+        total_ok=len(sources),
+    )
+
+
+def _make_partial_validation_result(sources, keep_n):
+    """Return a ValidationResult keeping only the first keep_n sources."""
+    from validation.urls import ValidationResult
+    return ValidationResult(
+        ok_sources=sources[:keep_n],
+        flags=[{"type": "source_unreachable", "url": s.get("url", ""), "publisher": "", "reason": "http_404"}
+               for s in sources[keep_n:]],
+        total_input=len(sources),
+        total_ok=keep_n,
+    )
+
+
+class TestResearchTopicSourceValidation:
+
+    @patch("agents.researcher.validate_sources")
+    @patch("agents.researcher.client.chat.completions.create")
+    @patch("agents.researcher.httpx.get")
+    def test_researcher_filters_sources_via_validator(
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
+    ):
+        """validate_sources is called; off-list URLs are dropped from the brief."""
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
+        monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
+        monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+
+        guardian_resp = MagicMock()
+        guardian_resp.json.return_value = {"response": {"results": _MANY_GUARDIAN_RESULTS}}
+        guardian_resp.raise_for_status.return_value = None
+        mock_get.return_value = guardian_resp
+
+        # LLM adds one additional source (fake domain, will be dropped by validator)
+        llm_json = json.dumps({
+            "key_facts": ["F1", "F2", "F3"],
+            "statistics": [
+                "75% stat — AIHW (2023)",
+                "$1850 rate — AMA (2023)",
+            ],
+            "ahpra_context": "Context.",
+            "additional_sources": [
+                {
+                    "title": "Fake Site",
+                    "url": "https://made-up.example.com/b",
+                    "publisher": "Fake",
+                    "snippet": "Irrelevant.",
+                }
+            ],
+        })
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=llm_json))],
+            usage=MagicMock(total_tokens=1000),
+        )
+
+        # Validator keeps only Guardian sources (drops the fake one)
+        def fake_validate(sources, *, http=None, sleeper=None):
+            kept = [s for s in sources if "theguardian.com" in s.get("url", "")]
+            return _make_ok_validation_result(kept)
+
+        mock_validate.side_effect = fake_validate
+
+        topic = _make_topic()
+        brief = research_topic(topic)
+
+        assert mock_validate.called
+        # Fake URL must not appear in final sources
+        source_urls = [s.url for s in brief.sources]
+        assert not any("made-up.example.com" in u for u in source_urls)
+        assert not brief.aborted
+
+    @patch("agents.researcher.validate_sources")
+    @patch("agents.researcher.client.chat.completions.create")
+    @patch("agents.researcher.httpx.get")
+    def test_researcher_re_broadens_when_post_validation_count_below_5(
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
+    ):
+        """When post-validation source count < 5, the adapter is called again (re-broaden)."""
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
+        monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
+        monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+
+        call_counts = {"guardian": 0}
+
+        def fake_get(url, *args, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            if "guardianapis" in url:
+                call_counts["guardian"] += 1
+                if call_counts["guardian"] == 1:
+                    # First call: only 2 articles (will yield <5 after validation)
+                    resp.json.return_value = {"response": {"results": _MANY_GUARDIAN_RESULTS[:2]}}
+                else:
+                    # Re-broaden: 7 articles
+                    resp.json.return_value = {"response": {"results": _MANY_GUARDIAN_RESULTS}}
+            else:
+                resp.json.return_value = {"results": []}
+            return resp
+
+        mock_get.side_effect = fake_get
+
+        llm_json = json.dumps({
+            "key_facts": ["F1", "F2"],
+            "statistics": ["75% stat — AIHW (2023)", "$1850 rate — AMA (2023)"],
+            "ahpra_context": "Context.",
+            "additional_sources": [],
+        })
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=llm_json))],
+            usage=MagicMock(total_tokens=1000),
+        )
+
+        # Validator keeps all sources (no real HEAD checks)
+        mock_validate.side_effect = lambda sources, **kw: _make_ok_validation_result(sources)
+
+        brief = research_topic(_make_topic())
+
+        # Guardian must have been called more than once (initial + re-broaden)
+        assert call_counts["guardian"] >= 2
+        assert not brief.aborted
+
+    @patch("agents.researcher.validate_sources")
+    @patch("agents.researcher.client.chat.completions.create")
+    @patch("agents.researcher.httpx.get")
+    def test_researcher_aborts_when_re_broaden_still_too_few(
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
+    ):
+        """After 2 re-broaden retries still < 5 sources → aborted brief."""
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
+        monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
+        monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+
+        def fake_get(url, *args, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            if "guardianapis" in url:
+                # Always returns only 2 articles — perpetually underfilled
+                resp.json.return_value = {"response": {"results": _MANY_GUARDIAN_RESULTS[:2]}}
+            else:
+                resp.json.return_value = {"results": []}
+            return resp
+
+        mock_get.side_effect = fake_get
+
+        llm_json = json.dumps({
+            "key_facts": [],
+            "statistics": [],
+            "ahpra_context": "",
+            "additional_sources": [],
+        })
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=llm_json))],
+            usage=MagicMock(total_tokens=1000),
+        )
+
+        # Validator keeps all sources (still only 2 after broadening)
+        mock_validate.side_effect = lambda sources, **kw: _make_ok_validation_result(sources)
+
+        brief = research_topic(_make_topic())
+
+        assert brief.aborted is True
+        assert brief.abort_reason == "too_few_valid_sources"
+
+    @patch("agents.researcher.validate_sources")
+    @patch("agents.researcher.client.chat.completions.create")
+    @patch("agents.researcher.httpx.get")
+    def test_researcher_aborts_on_token_budget_exceeded(
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
+    ):
+        """If the LLM call exceeds RESEARCHER_BUDGET_TOKENS, return aborted brief."""
+        monkeypatch.setenv("RESEARCHER_BUDGET_TOKENS", "50000")
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
+        monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
+        monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+
+        guardian_resp = MagicMock()
+        guardian_resp.json.return_value = {"response": {"results": _MANY_GUARDIAN_RESULTS}}
+        guardian_resp.raise_for_status.return_value = None
+        mock_get.return_value = guardian_resp
+
+        # LLM reports usage over budget
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_RESEARCH_RESPONSE_JSON))],
+            usage=MagicMock(total_tokens=60_000),
+        )
+
+        mock_validate.side_effect = lambda sources, **kw: _make_ok_validation_result(sources)
+
+        brief = research_topic(_make_topic())
+
+        assert brief.aborted is True
+        assert brief.abort_reason == "budget_exceeded"
+
+    @patch("agents.researcher.validate_sources")
+    @patch("agents.researcher.client.chat.completions.create")
+    @patch("agents.researcher.httpx.get")
+    def test_validate_sources_called_with_existing_httpx_client(
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
+    ):
+        """validate_sources receives an httpx.Client instance (not None)."""
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
+        monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
+        monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+
+        guardian_resp = MagicMock()
+        guardian_resp.json.return_value = {"response": {"results": _MANY_GUARDIAN_RESULTS}}
+        guardian_resp.raise_for_status.return_value = None
+        mock_get.return_value = guardian_resp
+
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_RESEARCH_RESPONSE_JSON))],
+            usage=MagicMock(total_tokens=1000),
+        )
+
+        captured = {}
+
+        def capturing_validate(sources, *, http=None, sleeper=None):
+            captured["http"] = http
+            return _make_ok_validation_result(sources)
+
+        mock_validate.side_effect = capturing_validate
+
+        research_topic(_make_topic())
+
+        assert "http" in captured
+        assert captured["http"] is not None
+        assert isinstance(captured["http"], httpx.Client)
