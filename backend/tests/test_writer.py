@@ -7,12 +7,16 @@ Covers:
 - word_count computed in write_post
 - Expansion retry logic triggered when word count < MIN_WORDS
 - write_post: full flow (OpenAI mocked) — output shape
+- M2.T1: per-content_type word floor in prompt (loaded from validators.json)
+- M2.T2: two-pass outline → draft structure
 
 LLM call is mocked throughout. No real API calls are made.
 """
 
+import json
 import os
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import pytest
@@ -178,13 +182,17 @@ class TestWritePost:
 
     @patch("agents.writer.client.chat.completions.create")
     def test_no_expansion_retry_when_above_min_words(self, mock_create):
-        """No second API call when word count already meets the floor."""
+        """No expansion retry call when word count already meets the floor.
+        With two-pass (outline + draft), there are exactly 2 calls — not 3."""
+        outline_content = "## Section One (target: 800 words)\n## Section Two (target: 800 words)\n"
         content = _minimal_markdown(word_target=1600)
-        mock_create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content=content))]
-        )
+        mock_create.side_effect = [
+            MagicMock(choices=[MagicMock(message=MagicMock(content=outline_content))]),
+            MagicMock(choices=[MagicMock(message=MagicMock(content=content))]),
+        ]
         write_post(_make_research())
-        assert mock_create.call_count == 1
+        # Two calls: outline pass + draft pass. No third expansion call.
+        assert mock_create.call_count == 2
 
     @patch("agents.writer.client.chat.completions.create")
     def test_chart_instruction_embedded_in_prompt_when_chart_url_present(self, mock_create):
@@ -280,3 +288,156 @@ class TestTldrExtraction:
         post = write_post(_make_research())
         assert "rest of content" not in post.tldr
         assert "Compact answer here." in post.tldr
+
+
+# ── M2.T1: word floor in prompt ───────────────────────────────────────────────
+
+
+def _make_mock_response(content: str) -> MagicMock:
+    """Return a MagicMock that mimics a real OpenAI response object."""
+    return MagicMock(
+        choices=[MagicMock(message=MagicMock(content=content))],
+        usage=MagicMock(total_tokens=500),
+    )
+
+
+def _outline_content() -> str:
+    """Minimal outline text returned by the first (outline) LLM call."""
+    return (
+        "## What is the average locum GP rate? (target: 300 words)\n"
+        "## How does pay vary by state? (target: 300 words)\n"
+        "## What does this mean for locum doctors in NSW? (target: 300 words)\n"
+        "## Frequently Asked Questions (target: 300 words)\n"
+        "## Sources (target: 100 words)\n"
+    )
+
+
+class TestWriterPromptFloor:
+    """M2.T1 — draft prompt explicitly states per-content_type word floor."""
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_writer_prompt_contains_floor_for_news(self, mock_create):
+        """Prompt for a news-pillar topic must mention 1500 (the news floor)."""
+        full_content = _minimal_markdown(word_target=1600)
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(full_content),
+        ]
+        news_topic = _make_topic(pillar=ContentPillar.NEWS)
+        write_post(_make_research(topic=news_topic))
+
+        # The draft call is the second call; check its messages for the floor.
+        assert mock_create.call_count >= 2
+        draft_messages = mock_create.call_args_list[-1][1]["messages"]
+        combined = " ".join(m["content"] for m in draft_messages)
+        assert "1500" in combined, (
+            "Expected the word floor '1500' for content_type=news to appear in the draft prompt"
+        )
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_writer_prompt_contains_floor_for_guide(self, mock_create):
+        """Prompt for a guide-pillar topic must mention 1500 (the guide floor)."""
+        full_content = _minimal_markdown(word_target=1600)
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(full_content),
+        ]
+        guide_topic = _make_topic(pillar=ContentPillar.HOW_TO)
+        write_post(_make_research(topic=guide_topic))
+
+        assert mock_create.call_count >= 2
+        draft_messages = mock_create.call_args_list[-1][1]["messages"]
+        combined = " ".join(m["content"] for m in draft_messages)
+        assert "1500" in combined, (
+            "Expected the word floor '1500' for content_type=guide to appear in the draft prompt"
+        )
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_writer_prompt_contains_floor_for_company(self, mock_create):
+        """Prompt for a company-pillar topic must mention 1000 (the company floor)."""
+        full_content = _minimal_markdown(word_target=1100)
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(full_content),
+        ]
+        company_topic = _make_topic(pillar=ContentPillar.COMPANY)
+        write_post(_make_research(topic=company_topic))
+
+        assert mock_create.call_count >= 2
+        draft_messages = mock_create.call_args_list[-1][1]["messages"]
+        combined = " ".join(m["content"] for m in draft_messages)
+        assert "1000" in combined, (
+            "Expected the word floor '1000' for content_type=company to appear in the draft prompt"
+        )
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_writer_loads_word_floors_from_validators_json_not_hardcoded(
+        self, mock_create, monkeypatch, tmp_path
+    ):
+        """Stubbing validators.json with sentinel floors proves the writer loads them
+        dynamically — if the floors were hardcoded in Python the sentinel values would
+        never appear in the prompt."""
+        # Write a sentinel validators.json to tmp_path
+        sentinel_floors = {"news": 9999, "guide": 8888, "company": 7777}
+        fake_validators = {"word_floors": sentinel_floors}
+        fake_json_path = tmp_path / "validators.json"
+        fake_json_path.write_text(json.dumps(fake_validators))
+
+        # Patch the loader used by the writer module to return our fake path
+        import agents.writer as writer_mod
+        monkeypatch.setattr(writer_mod, "_VALIDATORS_JSON_PATH", str(fake_json_path))
+        # Also patch the cached floors dict so the module reloads from the stub
+        monkeypatch.setattr(writer_mod, "_WORD_FLOORS", None)
+
+        full_content = _minimal_markdown(word_target=9999)
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(full_content),
+        ]
+        news_topic = _make_topic(pillar=ContentPillar.NEWS)
+        write_post(_make_research(topic=news_topic))
+
+        assert mock_create.call_count >= 2
+        draft_messages = mock_create.call_args_list[-1][1]["messages"]
+        combined = " ".join(m["content"] for m in draft_messages)
+        assert "9999" in combined, (
+            "Expected sentinel floor '9999' to appear in prompt — "
+            "this fails if floors are hardcoded in Python rather than loaded from JSON"
+        )
+
+
+# ── M2.T2: two-pass outline → draft ──────────────────────────────────────────
+
+
+class TestWriterTwoPass:
+    """M2.T2 — writer makes an outline call then a draft call."""
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_writer_two_pass_outline_then_draft(self, mock_create):
+        """The writer must call the LLM twice: first for an outline, then for
+        the full draft. The draft call's messages must contain text from the
+        outline returned by the first call."""
+        outline_text = _outline_content()
+        full_content = _minimal_markdown(word_target=1600)
+
+        mock_create.side_effect = [
+            _make_mock_response(outline_text),
+            _make_mock_response(full_content),
+        ]
+
+        research = _make_research()
+        post = write_post(research)
+
+        # Two calls minimum (outline + draft); expansion retry is a third if needed
+        assert mock_create.call_count >= 2, (
+            f"Expected at least 2 LLM calls (outline + draft), got {mock_create.call_count}"
+        )
+
+        # The second call's messages must include text from the outline
+        draft_call_messages = mock_create.call_args_list[1][1]["messages"]
+        draft_combined = " ".join(m["content"] for m in draft_call_messages)
+        # The outline contains a distinctive phrase; verify it's in the draft prompt
+        assert "target:" in draft_combined or "## What is the average" in draft_combined, (
+            "The draft call's prompt should contain content from the outline returned by "
+            "the first (outline) LLM call"
+        )
