@@ -5,10 +5,20 @@ Generates:
 - Meta title (≤60 chars) and meta description (≤155 chars)
 - Focus keyword
 - Reading time
-- keywords[] (5–8 supplementary keywords)
+- keywords[] (5–8 supplementary keywords — internal only, NOT rendered as <meta name="keywords">)
 - twitter_card { title, description, image }
 - FAQ JSON-LD schema (for Google rich results)
 - MedicalWebPage schema (legacy — website now also emits MedicalScholarlyArticle)
+
+M6.5 additions (SEO/AEO cross-check, May 2026):
+- reviewedBy: Person reference (Dr Anu is both author and medical reviewer)
+- citation[]: ScholarlyArticle entries built from post.sources[]
+- publicationType (MeSH): "Review" for guides, "News Article" for news, omitted for company
+- speakable: SpeakableSpecification emitted ONLY for news posts (.article-tldr selector)
+
+NOTE: <meta name="keywords"> is intentionally NOT emitted from this repo's frontend.
+Google has ignored that tag since 2009; Bing has been known to spam-flag pages that use it.
+The keywords[] field is retained internally for writer/SEO logic only.
 """
 
 import json
@@ -22,7 +32,7 @@ from openai import OpenAI
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from config import OPENAI_API_KEY, FAST_MODEL, SITE_URL, SITE_NAME
-from models import BlogPost, ContentType, SEOMetadata, TopicBrief, TwitterCard
+from models import BlogPost, ContentType, SEOMetadata, TopicBrief, TwitterCard, Source
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -49,6 +59,68 @@ _TITLE_CADENCES: dict[str, list[str]] = {
 }
 
 
+# ── M6.5 schema helpers ───────────────────────────────────────────────────────
+
+# Dr Anu is both author and medical reviewer for all StatDoctor content.
+_DR_ANU_PERSON = {
+    "@type": "Person",
+    "name": "Dr Anu Ganugapati",
+    "url": "https://statdoctor.net/about",
+    "jobTitle": "Medical Director",
+    "affiliation": {"@type": "Organization", "name": "StatDoctor"},
+}
+
+# MeSH publicationType mapping by content_type.
+# "company" posts are omitted entirely (overclaiming risk).
+_PUBLICATION_TYPE_MAP: dict[str, str] = {
+    "guide": "Review",
+    "news": "News Article",
+    # "company" key deliberately absent — field is omitted
+}
+
+_SPEAKABLE_SPEC = {
+    "@type": "SpeakableSpecification",
+    "cssSelector": [".article-tldr"],
+}
+
+
+def _build_reviewed_by() -> dict:
+    """Return a reviewedBy Person node (Dr Anu is author + medical reviewer)."""
+    return _DR_ANU_PERSON.copy()
+
+
+def _build_citation(sources: list[Source]) -> list[dict]:
+    """Convert sources[] to ScholarlyArticle citation entries."""
+    citations = []
+    for src in sources:
+        entry: dict = {
+            "@type": "ScholarlyArticle",
+            "url": src.url,
+            "name": src.title,
+            "publisher": {
+                "@type": "Organization",
+                "name": src.publisher,
+            },
+        }
+        citations.append(entry)
+    return citations
+
+
+def _build_publication_type(content_type: ContentType) -> str | None:
+    """Return MeSH publicationType string, or None for company posts."""
+    return _PUBLICATION_TYPE_MAP.get(content_type.value)
+
+
+def _build_speakable(content_type: ContentType) -> dict | None:
+    """Return SpeakableSpecification only for news posts; None otherwise.
+
+    Emitting speakable for non-news overclaims — Google may penalise.
+    """
+    if content_type == ContentType.NEWS:
+        return _SPEAKABLE_SPEC.copy()
+    return None
+
+
 def _slugify(title: str) -> str:
     slug = title.lower()
     slug = re.sub(r"[^\w\s-]", "", slug)
@@ -67,6 +139,7 @@ def generate_seo(
     topic: TopicBrief,
     content_type: ContentType = ContentType.GUIDE,
     image_url: str | None = None,
+    sources: list[Source] | None = None,
 ) -> SEOMetadata:
     """Generate all SEO metadata for the post."""
     print(f"[SEO] Generating metadata (content_type={content_type.value})...")
@@ -192,6 +265,12 @@ FAQ schema rules:
         if len(keywords) >= 8:
             break
 
+    # ── M6.5 schema fields ────────────────────────────────────────────────────
+    reviewed_by = _build_reviewed_by()
+    citation = _build_citation(sources or [])
+    publication_type = _build_publication_type(content_type)
+    speakable = _build_speakable(content_type)
+
     seo = SEOMetadata(
         slug=slug,
         meta_title=data["meta_title"][:60],
@@ -203,6 +282,10 @@ FAQ schema rules:
         twitter_card=twitter_card,
         faq_json_ld=data["faq_json_ld"],
         medical_webpage_schema=data["medical_webpage_schema"],
+        reviewed_by=reviewed_by,
+        citation=citation,
+        publication_type=publication_type,
+        speakable=speakable,
     )
 
     print(f"  [SEO] Slug: /blog/{seo.slug}")
