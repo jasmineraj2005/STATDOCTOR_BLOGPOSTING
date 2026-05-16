@@ -443,3 +443,61 @@ INLINE CHART — embed exactly once, after the second H2 section. Use this ready
 
     print(f"  [Writer] Done — {word_count} words")
     return post
+
+
+# ── rejection-reason retry ────────────────────────────────────────────────────
+
+# Human-readable labels for each rejection code (mirrors TS REJECTION_LABELS).
+_REJECTION_LABELS: dict[str, str] = {
+    "off_brand_voice": "Off-brand voice",
+    "weak_sources": "Weak sources / not enough .gov.au",
+    "wrong_angle": "Wrong angle / not what we'd say",
+    "too_promotional": "Too promotional / breaks honest-marketplace rule",
+    "ahpra_disagree": "AHPRA flag I disagree with",
+    "topic_uninteresting": "Topic isn't interesting",
+    "other": "Other",
+}
+
+
+def regenerate(slug: str, rejection_reason: str, original_content: str) -> str:
+    """Regenerate a rejected draft, addressing the specific rejection reason.
+
+    Parameters
+    ----------
+    slug:
+        The article slug (used for logging / identification only).
+    rejection_reason:
+        The rejection_code string (e.g. "off_brand_voice") OR a human-readable
+        description of why the draft was rejected.
+    original_content:
+        The Markdown content of the rejected draft.
+
+    Returns
+    -------
+    str
+        The new Markdown draft content with the rejection issue addressed.
+    """
+    # Resolve human label if a known code was passed
+    human_label = _REJECTION_LABELS.get(rejection_reason, rejection_reason)
+
+    prompt = (
+        f"Your previous draft was rejected because [{rejection_reason}]: {human_label}. "
+        f"Rewrite addressing this specifically.\n\n"
+        f"Original draft:\n\n{original_content}\n\n"
+        f"Instructions:\n"
+        f"- Fix the issue described above throughout the entire article.\n"
+        f"- Do not change the structure, headings, or factual claims unless they are the root cause.\n"
+        f"- Preserve word count (do not shorten the article).\n"
+        f"- Output only the corrected Markdown — no preamble."
+    )
+
+    print(f"  [Writer] Regenerating '{slug}' — rejection_reason={rejection_reason!r}")
+    response = client.chat.completions.create(
+        model=WRITER_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.5,
+        max_tokens=6000,
+    )
+    new_content = response.choices[0].message.content.strip()
+    print(f"  [Writer] Regenerated '{slug}' — {len(new_content.split())} words")
+    return new_content

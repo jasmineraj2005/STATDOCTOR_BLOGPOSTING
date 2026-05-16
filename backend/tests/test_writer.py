@@ -25,7 +25,7 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from agents.writer import _PILLAR_LABELS, write_post  # noqa: E402
+from agents.writer import _PILLAR_LABELS, _REJECTION_LABELS, write_post, regenerate  # noqa: E402
 from models import (  # noqa: E402
     BlogPost,
     ContentPillar,
@@ -441,3 +441,101 @@ class TestWriterTwoPass:
             "The draft call's prompt should contain content from the outline returned by "
             "the first (outline) LLM call"
         )
+
+
+# ── M4: regenerate (rejection-reason retry) ───────────────────────────────────
+
+
+class TestRegenerate:
+    """D4 — writer.regenerate threads rejection_reason into the retry prompt."""
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_regenerate_includes_rejection_code_in_prompt(self, mock_create):
+        """rejection_code string must appear in the prompt sent to the LLM."""
+        new_content = _minimal_markdown(word_target=1600)
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=new_content))]
+        )
+        result = regenerate(
+            slug="test-slug",
+            rejection_reason="off_brand_voice",
+            original_content="# Old draft\n\nShort content.",
+        )
+        assert mock_create.call_count == 1
+        prompt = mock_create.call_args[1]["messages"][0]["content"]
+        assert "off_brand_voice" in prompt
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_regenerate_includes_human_label_in_prompt(self, mock_create):
+        """Human-readable label for the rejection code must appear in the prompt."""
+        new_content = _minimal_markdown(word_target=1600)
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=new_content))]
+        )
+        regenerate(
+            slug="test-slug",
+            rejection_reason="off_brand_voice",
+            original_content="# Old draft\n\nSome content.",
+        )
+        prompt = mock_create.call_args[1]["messages"][0]["content"]
+        assert "Off-brand voice" in prompt
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_regenerate_includes_rewrite_instruction(self, mock_create):
+        """Prompt must tell the model to rewrite addressing the rejection reason."""
+        new_content = _minimal_markdown(word_target=1600)
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=new_content))]
+        )
+        regenerate(
+            slug="test-slug",
+            rejection_reason="wrong_angle",
+            original_content="# Old draft\n\nSome content.",
+        )
+        prompt = mock_create.call_args[1]["messages"][0]["content"]
+        # Must contain the key instruction phrase
+        assert "Rewrite addressing this specifically" in prompt
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_regenerate_returns_new_content_string(self, mock_create):
+        """regenerate() must return the new content as a string."""
+        new_content = "# New Title\n\n**TL;DR:** Better.\n\n## Updated section\n\nFixed content."
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=new_content))]
+        )
+        result = regenerate(
+            slug="test-slug",
+            rejection_reason="weak_sources",
+            original_content="# Old draft\n\nBad sources.",
+        )
+        assert result == new_content
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_regenerate_unknown_code_uses_code_as_label(self, mock_create):
+        """If rejection_reason is not a known code, it is still included as-is."""
+        new_content = _minimal_markdown(word_target=1600)
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=new_content))]
+        )
+        regenerate(
+            slug="test-slug",
+            rejection_reason="custom_editorial_note",
+            original_content="# Old draft\n\nContent.",
+        )
+        prompt = mock_create.call_args[1]["messages"][0]["content"]
+        assert "custom_editorial_note" in prompt
+
+    def test_rejection_labels_include_all_known_codes(self):
+        """_REJECTION_LABELS must map all 7 known rejection codes."""
+        known_codes = [
+            "off_brand_voice",
+            "weak_sources",
+            "wrong_angle",
+            "too_promotional",
+            "ahpra_disagree",
+            "topic_uninteresting",
+            "other",
+        ]
+        for code in known_codes:
+            assert code in _REJECTION_LABELS, f"Missing label for code: {code}"
+            assert _REJECTION_LABELS[code].strip(), f"Empty label for code: {code}"
