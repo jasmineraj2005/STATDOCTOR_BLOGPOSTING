@@ -75,7 +75,6 @@ export default function ShaderBackground({ children }: ShaderBackgroundProps) {
         speed={0.2}
         // @ts-expect-error — `wireframe` is accepted at runtime by @paper-design/shaders-react MeshGradient but not in its public type definitions.
         wireframe="true"
-        // @ts-expect-error — `backgroundColor` is accepted at runtime by @paper-design/shaders-react MeshGradient but not in its public type definitions.
         backgroundColor="transparent"
       />
 
