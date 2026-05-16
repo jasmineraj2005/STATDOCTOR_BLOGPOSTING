@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "description": "Cross-language URL-validator drift fixture. Python validator and TS validator MUST produce identical is_whitelisted decisions on every URL below. Update whenever the whitelist evolves.",
+  "cases": [
+    { "url": "https://www.theguardian.com/au-news/article", "expected_whitelisted": true, "tier": "mainstream-news" },
+    { "url": "https://theguardian.com/article", "expected_whitelisted": true, "tier": "mainstream-news" },
+    { "url": "https://i.guim.co.uk/img/x.jpg", "expected_whitelisted": false, "tier": null },
+    { "url": "https://www.abc.net.au/news/article", "expected_whitelisted": true, "tier": "mainstream-aus" },
+    { "url": "https://reuters.com/world/article", "expected_whitelisted": true, "tier": "mainstream-news" },
+    { "url": "https://apnews.com/article", "expected_whitelisted": true, "tier": "mainstream-news" },
+    { "url": "https://www.aihw.gov.au/reports/x", "expected_whitelisted": true, "tier": "gov-au" },
+    { "url": "https://www1.aihw.gov.au/reports/x", "expected_whitelisted": true, "tier": "gov-au" },
+    { "url": "https://health.gov.au/policy", "expected_whitelisted": true, "tier": "gov-au" },
+    { "url": "https://ahpra.gov.au/registration", "expected_whitelisted": true, "tier": "gov-au" },
+    { "url": "https://racgp.org.au/practice", "expected_whitelisted": true, "tier": "professional-body" },
+    { "url": "https://ama.com.au/policy", "expected_whitelisted": true, "tier": "professional-body" },
+    { "url": "https://thelancet.com/journals", "expected_whitelisted": true, "tier": "peer-reviewed" },
+    { "url": "https://www.ncbi.nlm.nih.gov/pubmed/12345", "expected_whitelisted": true, "tier": "peer-reviewed" },
+    { "url": "https://made-up-domain.example.com/x", "expected_whitelisted": false, "tier": null },
+    { "url": "https://medical-blog-spam.io/best-doctor", "expected_whitelisted": false, "tier": null },
+    { "url": "https://www.doh.gov.au/reports/x", "expected_whitelisted": false, "tier": null },
+    { "url": "https://wikipedia.org/wiki/Article", "expected_whitelisted": false, "tier": null },
+    { "url": "not a url", "expected_whitelisted": false, "tier": null },
+    { "url": "https://THEGUARDIAN.COM/x", "expected_whitelisted": true, "tier": "mainstream-news" }
+  ]
+}
