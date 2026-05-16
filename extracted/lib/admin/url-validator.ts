@@ -243,6 +243,46 @@ export async function headCheck(
 }
 
 // ---------------------------------------------------------------------------
+// validateSourcesQuick  (whitelist-only, no HEAD calls)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fast whitelist-only validation — no HEAD requests.
+ *
+ * Use this at ingest time (server-side gate) to avoid adding multiple seconds
+ * of latency per POST. The Python pipeline performs HEAD checks at generation
+ * time (M1.T6) as a productivity layer before the article reaches ingest.
+ *
+ * Contrast with `validateSources`, which runs the full whitelist + HEAD-check
+ * pipeline and is appropriate for auditing / reporting contexts where latency
+ * is not a concern.
+ */
+export function validateSourcesQuick(sources: SourceLike[]): ValidationResult {
+  const flags: SourceFlag[] = [];
+  const okSources: SourceLike[] = [];
+
+  for (const source of sources) {
+    const url = source.url ?? "";
+    if (!url || !isWhitelisted(url)) {
+      flags.push({
+        type: "source_not_in_whitelist",
+        url,
+        publisher: source.publisher,
+      });
+    } else {
+      okSources.push(source);
+    }
+  }
+
+  return {
+    okSources,
+    flags,
+    totalInput: sources.length,
+    totalOk: okSources.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // validateSources
 // ---------------------------------------------------------------------------
 
