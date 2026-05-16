@@ -169,8 +169,8 @@ export default async function PostEditPage({
 
 function ValidatorPanel({ results }: { results: ValidationResult[] }) {
   return (
-    <div className="rounded-2xl bg-white border border-ink/10 p-5">
-      <h3 className="eyebrow text-ocean mb-3">Validators</h3>
+    <div className="rounded-2xl bg-white border border-gray-200 p-5">
+      <h3 className="text-[10px] font-semibold tracking-widest uppercase text-indigo-600 mb-3">Validators</h3>
       <ul className="space-y-3">
         {results.map((r) => {
           const dotClass =
@@ -186,8 +186,8 @@ function ValidatorPanel({ results }: { results: ValidationResult[] }) {
                 aria-hidden
               />
               <div className="min-w-0">
-                <div className="text-sm font-medium text-ink">{r.label}</div>
-                <div className="text-[11px] text-muted leading-snug">{r.detail}</div>
+                <div className="text-sm font-medium text-gray-900">{r.label}</div>
+                <div className="text-[11px] text-gray-600 leading-snug">{r.detail}</div>
               </div>
             </li>
           );
@@ -203,14 +203,14 @@ function RejectForm({ slug }: { slug: string }) {
     <form
       action={`/api/posts/${slug}/reject`}
       method="POST"
-      className="rounded-2xl bg-white border border-ink/10 p-5"
+      className="rounded-2xl bg-white border border-gray-200 p-5"
     >
-      <h3 className="eyebrow text-ocean mb-3">Reject</h3>
+      <h3 className="text-[10px] font-semibold tracking-widest uppercase text-indigo-600 mb-3">Reject</h3>
       <label className="block mb-3">
-        <span className="eyebrow text-muted">Reason</span>
+        <span className="text-[10px] font-semibold tracking-widest uppercase text-gray-600">Reason</span>
         <select
           name="reason_code"
-          className="mt-1 w-full px-3 py-2 rounded-lg border border-ink/15 bg-white text-sm"
+          className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm"
         >
           {codes.map((c) => (
             <option key={c} value={c}>
@@ -220,20 +220,20 @@ function RejectForm({ slug }: { slug: string }) {
         </select>
       </label>
       <label className="block mb-3">
-        <span className="eyebrow text-muted">Detail (optional, sent to writer regen)</span>
+        <span className="text-[10px] font-semibold tracking-widest uppercase text-gray-600">Detail (optional, sent to writer regen)</span>
         <textarea
           name="reason_text"
           rows={3}
-          className="mt-1 w-full px-3 py-2 rounded-lg border border-ink/15 bg-white text-sm"
+          className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm"
         />
       </label>
       <button
         type="submit"
-        className="px-4 py-2 rounded-full bg-white border border-ink/30 text-ink mono text-[10px] tracking-widest hover:bg-ink hover:text-white transition-colors"
+        className="px-4 py-2 rounded-full bg-white border border-gray-400 text-gray-900 font-monotext-[10px] tracking-widest hover:bg-gray-900 hover:text-white transition-colors"
       >
         REJECT
       </button>
-      <p className="mt-3 text-[10px] text-muted leading-snug">
+      <p className="mt-3 text-[10px] text-gray-600 leading-snug">
         After 2 rejections on the same topic, it's dropped from the queue permanently.
       </p>
     </form>
@@ -247,8 +247,8 @@ function RejectionHistory({
 }) {
   return (
     <div className="rounded-2xl bg-lavender/40 border border-ocean/15 p-5">
-      <h3 className="eyebrow text-ocean mb-3">Rejection history</h3>
-      <ul className="space-y-2 text-xs text-ink/80">
+      <h3 className="text-[10px] font-semibold tracking-widest uppercase text-indigo-600 mb-3">Rejection history</h3>
+      <ul className="space-y-2 text-xs text-gray-900/80">
         {entries.map((e, i) => (
           <li key={i}>
             <span className="mono">{new Date(e.ts).toLocaleString("en-AU")}</span> —{" "}
