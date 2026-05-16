@@ -129,10 +129,23 @@ class SEOMetadata(BaseModel):
     focus_keyword: str
     og_image_alt: str
     reading_time_minutes: int
-    keywords: list[str] = []  # 5–8 supplementary keywords for <meta name="keywords">
+    # Internal JSON field — used by writer/SEO logic.
+    # NOTE: do NOT render as <meta name="keywords"> in the frontend;
+    # Google has ignored it since 2009 and Bing spam-flags it.
+    keywords: list[str] = []
     twitter_card: Optional[TwitterCard] = None
     faq_json_ld: dict
     medical_webpage_schema: dict
+    # New M6.5 schema fields — consumed by the website-repo serialiser (M6).
+    # reviewed_by: Person reference — Dr Anu is both author and medical reviewer.
+    reviewed_by: Optional[dict] = None
+    # citation: array of ScholarlyArticle entries built from sources[].
+    citation: list[dict] = []
+    # publication_type: MeSH-style type string.
+    # "Review" for guides, "News Article" for news, omitted for company posts.
+    publication_type: Optional[str] = None
+    # speakable: SpeakableSpecification — emitted only for news posts.
+    speakable: Optional[dict] = None
 
 
 class AHPRAFlag(BaseModel):
@@ -169,6 +182,11 @@ class FinalPost(BaseModel):
     image_credit: Optional[str] = None
     faq_json_ld: dict
     medical_webpage_schema: dict
+    # M6.5 schema fields — mirrors SEOMetadata additions.
+    reviewed_by: Optional[dict] = None
+    citation: list[dict] = []
+    publication_type: Optional[str] = None
+    speakable: Optional[dict] = None
     ahpra_flags: list[AHPRAFlag]
     ahpra_passed: bool
 

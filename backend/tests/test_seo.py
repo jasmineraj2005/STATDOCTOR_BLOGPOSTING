@@ -23,7 +23,7 @@ os.environ.setdefault("OPENAI_API_KEY", "sk-test")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from agents.seo import _TITLE_CADENCES, _reading_time, _slugify, generate_seo  # noqa: E402
-from models import BlogPost, ContentPillar, ContentType, SEOMetadata, TopicBrief  # noqa: E402
+from models import BlogPost, ContentPillar, ContentType, SEOMetadata, Source, TopicBrief  # noqa: E402
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -355,3 +355,114 @@ class TestGenerateSeo:
         result = generate_seo(_make_post(), _make_topic())
         prompt_text = mock_create.call_args[1]["messages"][0]["content"]
         assert "guide" in prompt_text.lower()
+
+
+# ── M6.5 schema field tests ───────────────────────────────────────────────────
+
+
+def _make_sources() -> list[Source]:
+    return [
+        Source(
+            title="AHPRA Registration Standards",
+            url="https://www.ahpra.gov.au/registration-standards",
+            publisher="AHPRA",
+            snippet="AHPRA sets registration standards for medical practitioners.",
+        ),
+        Source(
+            title="AIHW Health Workforce Data",
+            url="https://www.aihw.gov.au/reports/workforce/health-workforce",
+            publisher="Australian Institute of Health and Welfare",
+            snippet="Data on health workforce numbers across Australia.",
+        ),
+    ]
+
+
+class TestSchemaM65Fields:
+    """M6.5: reviewedBy, citation, publicationType, speakable."""
+
+    @patch("agents.seo.client.chat.completions.create")
+    def test_schema_includes_reviewedBy_for_every_article(self, mock_create):
+        """Every article regardless of content_type must carry a reviewedBy Person node."""
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_seo_response_json()))]
+        )
+        for ct in ContentType:
+            result = generate_seo(_make_post(), _make_topic(), content_type=ct)
+            assert result.reviewed_by is not None, f"reviewed_by missing for content_type={ct.value}"
+            assert result.reviewed_by.get("@type") == "Person"
+            assert "name" in result.reviewed_by, "reviewed_by must have a name"
+
+    @patch("agents.seo.client.chat.completions.create")
+    def test_schema_citation_array_serialises_sources_correctly(self, mock_create):
+        """citation[] entries map 1:1 with sources, carrying @type, url, name, publisher."""
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_seo_response_json()))]
+        )
+        sources = _make_sources()
+        result = generate_seo(_make_post(), _make_topic(), sources=sources)
+        assert len(result.citation) == len(sources)
+        for entry, src in zip(result.citation, sources):
+            assert entry["@type"] == "ScholarlyArticle"
+            assert entry["url"] == src.url
+            assert entry["name"] == src.title
+            assert entry["publisher"]["@type"] == "Organization"
+            assert entry["publisher"]["name"] == src.publisher
+
+    @patch("agents.seo.client.chat.completions.create")
+    def test_schema_citation_empty_when_no_sources_provided(self, mock_create):
+        """When sources is None or empty, citation must be an empty list."""
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_seo_response_json()))]
+        )
+        result = generate_seo(_make_post(), _make_topic(), sources=None)
+        assert result.citation == []
+
+        result2 = generate_seo(_make_post(), _make_topic(), sources=[])
+        assert result2.citation == []
+
+    @patch("agents.seo.client.chat.completions.create")
+    def test_schema_publicationType_review_for_guide(self, mock_create):
+        """content_type=guide → publicationType 'Review' (MeSH)."""
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_seo_response_json()))]
+        )
+        result = generate_seo(_make_post(), _make_topic(), content_type=ContentType.GUIDE)
+        assert result.publication_type == "Review"
+
+    @patch("agents.seo.client.chat.completions.create")
+    def test_schema_publicationType_news_article_for_news(self, mock_create):
+        """content_type=news → publicationType 'News Article' (MeSH)."""
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_seo_response_json()))]
+        )
+        result = generate_seo(_make_post(), _make_topic(), content_type=ContentType.NEWS)
+        assert result.publication_type == "News Article"
+
+    @patch("agents.seo.client.chat.completions.create")
+    def test_schema_publicationType_omitted_for_company(self, mock_create):
+        """content_type=company → publicationType must be None (omitted)."""
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_seo_response_json()))]
+        )
+        result = generate_seo(_make_post(), _make_topic(), content_type=ContentType.COMPANY)
+        assert result.publication_type is None
+
+    @patch("agents.seo.client.chat.completions.create")
+    def test_schema_speakable_only_for_news(self, mock_create):
+        """speakable must be emitted ONLY for news; None for guide and company."""
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=_seo_response_json()))]
+        )
+        # news → speakable present
+        news_result = generate_seo(_make_post(), _make_topic(), content_type=ContentType.NEWS)
+        assert news_result.speakable is not None
+        assert news_result.speakable.get("@type") == "SpeakableSpecification"
+        assert ".article-tldr" in news_result.speakable.get("cssSelector", [])
+
+        # guide → speakable absent
+        guide_result = generate_seo(_make_post(), _make_topic(), content_type=ContentType.GUIDE)
+        assert guide_result.speakable is None
+
+        # company → speakable absent
+        company_result = generate_seo(_make_post(), _make_topic(), content_type=ContentType.COMPANY)
+        assert company_result.speakable is None
