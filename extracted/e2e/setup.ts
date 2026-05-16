@@ -3,28 +3,58 @@
  * article into pending_review so the spec can drive a full review flow.
  *
  * Runs once before any tests. Idempotent: each run resets state.
+ *
+ * Works on macOS and Linux (no dependency on Homebrew pg binaries).
+ * Requires POSTGRES_URL to point at a running Postgres instance.
+ * The URL's database segment is the target test DB; we connect to the
+ * maintenance "postgres" DB to drop + recreate it.
  */
 
-import { execSync } from "child_process";
 import { Client } from "pg";
 
-const DB_NAME = "statdoctor_admin_playwright";
+const sampleSlug = "playwright-locum-sydney";
 const PUBLISH_DIR = "/tmp/sd-playwright-publish";
 
-const DB_USER = process.env.USER ?? "postgres";
-const PG_BIN = "/opt/homebrew/opt/postgresql@16/bin";
+/**
+ * Derive the admin (maintenance) connection string and target DB name from
+ * POSTGRES_URL.  Falls back to a sensible local default so local dev still
+ * works without any extra env setup.
+ */
+function getConnectionInfo(): { adminUrl: string; targetDb: string; targetUrl: string } {
+  const raw =
+    process.env.POSTGRES_URL ??
+    `postgresql://${process.env.USER ?? "postgres"}@localhost:5432/statdoctor_admin_playwright`;
 
-const sampleSlug = "playwright-locum-sydney";
+  const url = new URL(raw);
+  const targetDb = url.pathname.replace(/^\//, "") || "statdoctor_admin_playwright";
 
-async function dropAndCreate(): Promise<void> {
-  execSync(`${PG_BIN}/dropdb --if-exists ${DB_NAME}`, { stdio: "inherit" });
-  execSync(`${PG_BIN}/createdb ${DB_NAME}`, { stdio: "inherit" });
+  // Admin connection goes to the maintenance DB so we can drop/create the target.
+  const adminUrl = new URL(raw);
+  adminUrl.pathname = "/postgres";
+
+  return { adminUrl: adminUrl.toString(), targetDb, targetUrl: raw };
 }
 
-async function applySchema(): Promise<void> {
-  const client = new Client({
-    connectionString: `postgresql://${DB_USER}@localhost:5432/${DB_NAME}`,
-  });
+async function dropAndCreate(adminUrl: string, targetDb: string): Promise<void> {
+  const admin = new Client({ connectionString: adminUrl });
+  await admin.connect();
+  try {
+    // Terminate active connections to the target DB before dropping.
+    await admin.query(
+      `SELECT pg_terminate_backend(pid)
+       FROM pg_stat_activity
+       WHERE datname = $1 AND pid <> pg_backend_pid()`,
+      [targetDb],
+    );
+    await admin.query(`DROP DATABASE IF EXISTS "${targetDb}"`);
+    await admin.query(`CREATE DATABASE "${targetDb}"`);
+  } finally {
+    await admin.end();
+  }
+}
+
+async function applySchema(targetUrl: string): Promise<void> {
+  const client = new Client({ connectionString: targetUrl });
   await client.connect();
   try {
     const fs = await import("fs/promises");
@@ -33,6 +63,7 @@ async function applySchema(): Promise<void> {
       path.resolve(process.cwd(), "lib", "admin", "schema.sql"),
       "utf-8",
     );
+    // Strip line comments, then split on statement boundaries.
     const stmts = schema
       .split("\n")
       .filter((l) => !l.trim().startsWith("--"))
@@ -48,10 +79,8 @@ async function applySchema(): Promise<void> {
   }
 }
 
-async function seedArticle(): Promise<void> {
-  const client = new Client({
-    connectionString: `postgresql://${DB_USER}@localhost:5432/${DB_NAME}`,
-  });
+async function seedArticle(targetUrl: string): Promise<void> {
+  const client = new Client({ connectionString: targetUrl });
   await client.connect();
   try {
     const now = new Date().toISOString();
@@ -159,9 +188,10 @@ async function preparePublishDir(): Promise<void> {
 }
 
 export default async function globalSetup() {
-  await dropAndCreate();
-  await applySchema();
-  await seedArticle();
+  const { adminUrl, targetDb, targetUrl } = getConnectionInfo();
+  await dropAndCreate(adminUrl, targetDb);
+  await applySchema(targetUrl);
+  await seedArticle(targetUrl);
   await preparePublishDir();
   // Make the slug discoverable by the spec without re-deriving.
   process.env.E2E_SEED_SLUG = sampleSlug;
