@@ -29,12 +29,20 @@ jobs:
         continue-on-error: true
   playwright:
     runs-on: ubuntu-latest
-    # TODO(M7): playwright globalSetup hardcodes /opt/homebrew/opt/postgresql@16/bin
-    # and assumes a local Postgres. Either (a) add a `services: postgres` block +
-    # make e2e/setup.ts Linux-aware (use `dropdb`/`createdb` from PATH), or
-    # (b) refactor setup to seed via the app API instead of raw psql.
-    # Until then, mark non-blocking so the rest of CI can gate the branch.
-    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: statdoctor_admin_playwright
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
@@ -51,8 +59,10 @@ jobs:
       - run: pnpm exec playwright test
         working-directory: extracted
         env:
-          POSTGRES_URL: ${{ secrets.TEST_POSTGRES_URL }}
-          ADMIN_TOKEN: ${{ secrets.TEST_ADMIN_TOKEN }}
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/statdoctor_admin_playwright
+          ADMIN_TOKEN: playwright-admin
+          INGEST_TOKEN: playwright-ingest
+          CRON_SECRET: playwright-cron
   pytest:
     runs-on: ubuntu-latest
     steps:
