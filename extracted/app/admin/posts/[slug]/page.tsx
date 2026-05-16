@@ -30,97 +30,61 @@ export default async function PostEditPage({
   const approvable = isApprovable(validators);
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)] pt-8 pb-32 px-6">
+    <main className="min-h-[calc(100vh-3.5rem)] bg-white pt-8 pb-32 px-6">
       <div className="max-w-[1300px] mx-auto">
-        <Link href="/admin/posts" className="eyebrow text-ocean hover:underline">
+        <Link
+          href="/admin/posts"
+          className="inline-block text-[10px] font-semibold tracking-widest uppercase text-indigo-600 hover:underline"
+        >
           ← Back to queue
         </Link>
+
+        {/* Page header */}
         <div className="mt-4 flex items-start justify-between gap-6 flex-wrap">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="px-2 py-0.5 rounded bg-electric mono text-[9px] tracking-widest uppercase">
+              <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-700 text-[9px] font-semibold tracking-widest uppercase">
                 {CONTENT_TYPE_LABELS[post.content_type]}
               </span>
-              <span className="px-2 py-0.5 rounded bg-lavender mono text-[9px] tracking-widest uppercase text-ocean">
+              <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[9px] font-semibold tracking-widest uppercase">
                 {PILLAR_LABELS[post.pillar] ?? post.pillar}
               </span>
-              <span className="mono text-[10px] text-muted">
+              <span className="text-[10px] text-gray-500 font-mono">
                 {post.status} · {post.word_count} words · {post.reading_time_minutes} min
               </span>
             </div>
-            <h1 className="display text-3xl md:text-4xl leading-tight">{post.title}</h1>
-            <p className="mt-2 text-muted text-sm max-w-2xl">{post.tldr}</p>
+            <h1 className="text-3xl md:text-4xl font-semibold text-gray-900 leading-tight">
+              {post.title}
+            </h1>
+            <p className="mt-2 text-gray-500 text-sm max-w-2xl">{post.tldr}</p>
           </div>
           <div className="flex gap-2">
             <form action={`/api/posts/${post.slug}/approve`} method="POST">
               <button
                 type="submit"
                 disabled={!approvable}
-                className="px-5 py-2.5 rounded-full bg-ocean text-white mono text-[10px] tracking-widest hover:bg-ink transition-colors disabled:bg-ink/20 disabled:text-ink/40 disabled:cursor-not-allowed"
+                className="px-5 py-2.5 rounded-full bg-indigo-600 text-white text-[10px] font-semibold tracking-widest hover:bg-indigo-800 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
                 title={
                   approvable
                     ? "Approve and publish to website"
                     : "Validators must all pass before approval"
                 }
               >
-                APPROVE & PUBLISH
+                APPROVE &amp; PUBLISH
               </button>
             </form>
           </div>
         </div>
 
+        {/* ── Preview + Validators grid (preview PRIMARY, left; validators right) ── */}
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
-          {/* Left: edit form */}
+          {/* Left: rendered article preview — top of fold, what CEO reads first */}
           <section>
-            <h2 className="eyebrow text-muted mb-3">Content (markdown)</h2>
-            <form action={`/api/posts/${post.slug}/edit`} method="POST" className="space-y-4">
-              <label className="block">
-                <span className="eyebrow text-muted">meta_title (≤60)</span>
-                <input
-                  name="meta_title"
-                  defaultValue={post.meta_title}
-                  maxLength={60}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-ink/15 bg-white text-sm"
-                />
-              </label>
-              <label className="block">
-                <span className="eyebrow text-muted">meta_description (≤155)</span>
-                <textarea
-                  name="meta_description"
-                  defaultValue={post.meta_description}
-                  maxLength={155}
-                  rows={2}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-ink/15 bg-white text-sm"
-                />
-              </label>
-              <label className="block">
-                <span className="eyebrow text-muted">keywords (comma-sep, 5–8)</span>
-                <input
-                  name="keywords"
-                  defaultValue={(post.keywords ?? []).join(", ")}
-                  className="mt-1 w-full px-3 py-2 rounded-lg border border-ink/15 bg-white text-sm"
-                />
-              </label>
-              <label className="block">
-                <span className="eyebrow text-muted">content_markdown</span>
-                <textarea
-                  name="content_markdown"
-                  defaultValue={post.content_markdown}
-                  rows={28}
-                  className="mt-1 w-full px-3 py-3 rounded-lg border border-ink/15 bg-white text-[13px] font-mono leading-relaxed"
-                />
-              </label>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-full bg-ink text-white mono text-[10px] tracking-widest hover:bg-ocean transition-colors"
-              >
-                SAVE EDITS & RE-VALIDATE
-              </button>
-            </form>
+            <ArticlePreviewPane post={post} />
           </section>
 
-          {/* Right: validator panel + reject form */}
-          <aside className="space-y-6">
+          {/* Right: validator panel + reject form (sticky on large screens) */}
+          <aside className="space-y-6 lg:sticky lg:top-8 lg:self-start">
             <ValidatorPanel results={validators} />
             <RejectForm slug={post.slug} />
             {post.rejection_history && post.rejection_history.length > 0 && (
@@ -129,13 +93,75 @@ export default async function PostEditPage({
           </aside>
         </div>
 
-        {/* ── Article Preview Pane ────────────────────────────────────────── */}
-        {/* Full-width below the editor+validator grid. White background matches
-            the public site reading view. Read-only — no editable controls. */}
-        <div className="mt-10">
-          <h2 className="eyebrow text-muted mb-3">Rendered Preview</h2>
-          <ArticlePreviewPane post={post} />
-        </div>
+        {/* ── Editor form — foldable, below the preview ────────────────────── */}
+        {/* Default closed so the CEO reads the rendered article first and only
+            opens the editor if they need to tweak metadata or markdown. */}
+        <details
+          className="mt-10 rounded-2xl border border-gray-200 bg-white shadow-sm"
+          data-testid="editor-fold"
+        >
+          <summary className="flex cursor-pointer select-none items-center justify-between px-6 py-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-2xl">
+            <span>Edit content</span>
+            <span className="text-gray-400 text-xs font-mono tracking-widest uppercase">
+              meta · keywords · markdown
+            </span>
+          </summary>
+
+          <div className="px-6 pb-6 pt-2">
+            <form action={`/api/posts/${post.slug}/edit`} method="POST" className="space-y-4">
+              <label className="block">
+                <span className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
+                  meta_title (≤60)
+                </span>
+                <input
+                  name="meta_title"
+                  defaultValue={post.meta_title}
+                  maxLength={60}
+                  className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
+                  meta_description (≤155)
+                </span>
+                <textarea
+                  name="meta_description"
+                  defaultValue={post.meta_description}
+                  maxLength={155}
+                  rows={2}
+                  className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
+                  keywords (comma-sep, 5–8)
+                </span>
+                <input
+                  name="keywords"
+                  defaultValue={(post.keywords ?? []).join(", ")}
+                  className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-900"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-semibold tracking-widest uppercase text-gray-500">
+                  content_markdown
+                </span>
+                <textarea
+                  name="content_markdown"
+                  defaultValue={post.content_markdown}
+                  rows={28}
+                  className="mt-1 w-full px-3 py-3 rounded-lg border border-gray-200 bg-white text-[13px] font-mono leading-relaxed text-gray-900"
+                />
+              </label>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-full bg-gray-900 text-white text-[10px] font-semibold tracking-widest hover:bg-indigo-600 transition-colors"
+              >
+                SAVE EDITS &amp; RE-VALIDATE
+              </button>
+            </form>
+          </div>
+        </details>
       </div>
     </main>
   );
