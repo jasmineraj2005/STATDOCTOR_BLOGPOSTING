@@ -66,13 +66,16 @@ export default function ShaderBackground({ children }: ShaderBackgroundProps) {
         className="absolute inset-0 w-full h-full"
         colors={["#000000", "#8b5cf6", "#ffffff", "#1e1b4b", "#4c1d95"]}
         speed={0.3}
+        // @ts-expect-error — `backgroundColor` is accepted at runtime by @paper-design/shaders-react MeshGradient but not in its public type definitions.
         backgroundColor="#000000"
       />
       <MeshGradient
         className="absolute inset-0 w-full h-full opacity-60"
         colors={["#000000", "#ffffff", "#8b5cf6", "#000000"]}
         speed={0.2}
+        // @ts-expect-error — `wireframe` is accepted at runtime by @paper-design/shaders-react MeshGradient but not in its public type definitions.
         wireframe="true"
+        // @ts-expect-error — `backgroundColor` is accepted at runtime by @paper-design/shaders-react MeshGradient but not in its public type definitions.
         backgroundColor="transparent"
       />
 
