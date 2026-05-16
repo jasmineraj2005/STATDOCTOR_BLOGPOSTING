@@ -8,7 +8,8 @@ export type PostStatus =
   | "approved"
   | "scheduled"
   | "rejected"
-  | "published";
+  | "published"
+  | "publish_failed";
 
 export type RejectionCode =
   | "off_brand_voice"
