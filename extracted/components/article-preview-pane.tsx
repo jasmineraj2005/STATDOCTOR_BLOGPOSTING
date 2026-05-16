@@ -495,7 +495,7 @@ export default function ArticlePreviewPane({ post }: { post: Post }) {
   const mdComponents = buildMdComponents(post.sources.length)
 
   return (
-    <div className="preview-pane bg-white rounded-2xl shadow-sm overflow-hidden border border-ink/10">
+    <div className="preview-pane bg-white rounded-2xl shadow-sm overflow-hidden border border-ink/10" data-testid="article-preview-pane">
       {/* Label strip */}
       <div className="px-5 py-2.5 bg-lavender/60 border-b border-ink/10 flex items-center justify-between">
         <span className="eyebrow text-ocean text-[10px] tracking-widest uppercase">
