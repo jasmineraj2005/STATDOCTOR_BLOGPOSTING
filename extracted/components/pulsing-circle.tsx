@@ -16,6 +16,7 @@ export default function PulsingCircle() {
           thickness={0.1}
           softness={0.2}
           intensity={5}
+          // @ts-expect-error — `spotsPerColor` is accepted at runtime by @paper-design/shaders-react but not in its public type definitions. Remove this comment when the lib types catch up.
           spotsPerColor={5}
           spotSize={0.1}
           pulse={0.1}

@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "schema_url": "https://github.com/jasmineraj2005/STATDOCTOR_BLOGPOSTING/blob/main/data/url-whitelist.schema.json",
+  "updated_at": "2026-05-16",
+  "domains": [
+    {
+      "domain": "theguardian.com",
+      "tier": "mainstream-news",
+      "rationale": "Major UK/AU/US international news publisher and primary Guardian Content API source used for health story discovery.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "abc.net.au",
+      "tier": "mainstream-aus",
+      "rationale": "Australian Broadcasting Corporation — the national public broadcaster and most trusted source for Australian health and science journalism.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "reuters.com",
+      "tier": "mainstream-news",
+      "rationale": "Global wire service providing authoritative, lightly editorialised health and medical news with high factual accuracy standards.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "apnews.com",
+      "tier": "mainstream-news",
+      "rationale": "Associated Press wire service — not-for-profit global newswire recognised for rigorous fact-checking and medical reporting accuracy.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "smh.com.au",
+      "tier": "mainstream-aus",
+      "rationale": "Sydney Morning Herald — major Australian metropolitan daily serving the NSW market with dedicated health and science coverage.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "theage.com.au",
+      "tier": "mainstream-aus",
+      "rationale": "The Age — major Australian metropolitan daily serving the Victorian market with consistent health, medicine, and public-policy reporting.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "news.com.au",
+      "tier": "mainstream-aus",
+      "rationale": "News Corp Australia's national digital masthead — broad reach across Australian general public and frequent health-news publisher.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "9news.com.au",
+      "tier": "mainstream-aus",
+      "rationale": "Nine Network's national news platform — high Australian audience reach with dedicated health and consumer-medicine segments.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "sbs.com.au",
+      "tier": "mainstream-aus",
+      "rationale": "Special Broadcasting Service — Australian public multicultural broadcaster with strong coverage of health equity and minority health topics.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "afr.com",
+      "tier": "mainstream-aus",
+      "rationale": "Australian Financial Review — authoritative source for health-industry business news, private-hospital policy, and pharmaceutical sector reporting.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "aihw.gov.au",
+      "tier": "gov-au",
+      "rationale": "Australian Institute of Health and Welfare — official federal statistical agency publishing primary health and welfare data underpinning all national health reports.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "abs.gov.au",
+      "tier": "gov-au",
+      "rationale": "Australian Bureau of Statistics — the national statistical authority whose census, mortality, and population-health datasets are primary sources for demographic health claims.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "health.gov.au",
+      "tier": "gov-au",
+      "rationale": "Australian Department of Health and Aged Care — primary federal health-policy, program, and regulatory guidance source.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "racgp.org.au",
+      "tier": "professional-body",
+      "rationale": "Royal Australian College of General Practitioners — peak GP professional body whose clinical guidelines and position statements govern primary-care practice in Australia.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "ama.com.au",
+      "tier": "professional-body",
+      "rationale": "Australian Medical Association — national doctor advocacy body whose policy positions and media statements represent the broader medical profession.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "ahpra.gov.au",
+      "tier": "gov-au",
+      "rationale": "Australian Health Practitioner Regulation Agency — the national regulator responsible for registration and accreditation of all health professions.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "medicalboard.gov.au",
+      "tier": "gov-au",
+      "rationale": "Medical Board of Australia (under AHPRA) — the specific regulatory board setting standards and managing complaints for registered medical practitioners.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "rcna.org.nz",
+      "tier": "professional-body",
+      "rationale": "Royal College of Nursing Aotearoa New Zealand — peak nursing professional body providing clinical guidelines and advocacy relevant to trans-Tasman health coverage.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "health.govt.nz",
+      "tier": "gov-nz",
+      "rationale": "New Zealand Ministry of Health — primary NZ government source for public-health policy, statistics, and national health-strategy documents.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "rnzcgp.org.nz",
+      "tier": "professional-body",
+      "rationale": "Royal New Zealand College of General Practitioners — peak NZ GP body whose clinical guidelines and workforce data inform trans-Tasman primary-care reporting.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "who.int",
+      "tier": "peer-reviewed",
+      "rationale": "World Health Organization — the UN's directing and coordinating authority on international public health, publishing globally authoritative guidelines and surveillance data.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "ncbi.nlm.nih.gov",
+      "tier": "peer-reviewed",
+      "rationale": "NCBI/PubMed at the US National Library of Medicine — the world's largest index of peer-reviewed biomedical and life-sciences literature.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "nature.com",
+      "tier": "peer-reviewed",
+      "rationale": "Nature portfolio — one of the world's most cited multidisciplinary science publishers including Nature Medicine and Nature Human Behaviour.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "thelancet.com",
+      "tier": "peer-reviewed",
+      "rationale": "The Lancet — one of the world's oldest and most influential peer-reviewed general medical journals, publishing landmark clinical research and health-policy analysis.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "mja.com.au",
+      "tier": "peer-reviewed",
+      "rationale": "Medical Journal of Australia — the premier peer-reviewed Australian clinical journal, publishing original research and guidelines directly relevant to Australian medical practice.",
+      "added_at": "2026-05-16"
+    },
+    {
+      "domain": "bmj.com",
+      "tier": "peer-reviewed",
+      "rationale": "The BMJ (British Medical Journal) — high-impact peer-reviewed general medical journal widely read by Australian clinicians and regularly cited in health-policy debates.",
+      "added_at": "2026-05-16"
+    }
+  ]
+}

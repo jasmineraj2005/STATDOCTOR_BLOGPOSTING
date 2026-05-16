@@ -1,0 +1,68 @@
+name: CI
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: extracted/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: extracted
+      - run: pnpm exec tsc --noEmit
+        working-directory: extracted
+      # Blocking gate: fails fast on test failure with no coverage overhead.
+      - run: pnpm test
+        working-directory: extracted
+      # Informational coverage report (continue-on-error: true) — thresholds
+      # become blocking in M0.T10 once backfill is complete.
+      - run: pnpm exec vitest run --coverage --reporter=verbose
+        working-directory: extracted
+        continue-on-error: true
+  playwright:
+    runs-on: ubuntu-latest
+    # TODO(M7): playwright globalSetup hardcodes /opt/homebrew/opt/postgresql@16/bin
+    # and assumes a local Postgres. Either (a) add a `services: postgres` block +
+    # make e2e/setup.ts Linux-aware (use `dropdb`/`createdb` from PATH), or
+    # (b) refactor setup to seed via the app API instead of raw psql.
+    # Until then, mark non-blocking so the rest of CI can gate the branch.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: extracted/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: extracted
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: extracted
+      - run: pnpm exec playwright test
+        working-directory: extracted
+        env:
+          POSTGRES_URL: ${{ secrets.TEST_POSTGRES_URL }}
+          ADMIN_TOKEN: ${{ secrets.TEST_ADMIN_TOKEN }}
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pytest pytest-cov
+        working-directory: backend
+      - run: pytest --cov=. --cov-report=term-missing
+        working-directory: backend
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
