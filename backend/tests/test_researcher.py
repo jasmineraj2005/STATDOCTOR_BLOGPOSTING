@@ -26,8 +26,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from agents.researcher import (  # noqa: E402
     _build_chart_url,
     _fetch_unsplash_image,
+    _is_blocked_image_url,
     _load_used_images,
     _save_used_image,
+    _scrape_og_image,
     _search_guardian,
     research_topic,
 )
@@ -658,3 +660,223 @@ class TestResearchTopicSourceValidation:
         assert "http" in captured
         assert captured["http"] is not None
         assert isinstance(captured["http"], httpx.Client)
+
+
+# ── TestImageFetching ─────────────────────────────────────────────────────────
+
+
+_GUARDIAN_ITEM_WITH_THUMBNAIL = {
+    "id": "society/gp-shortage",
+    "webTitle": "GP shortage worsens in rural Australia",
+    "webUrl": "https://theguardian.com/gp-shortage",
+    "webPublicationDate": "2024-01-01T00:00:00Z",
+    "sectionName": "Society",
+    "fields": {
+        "trailText": "Doctors are leaving rural areas.",
+        "bodyText": "Body text here.",
+        "thumbnail": "https://i.guim.co.uk/img/media/abc123/master/1200.jpg",
+        "byline": "Mike Bowers/AAP",
+    },
+}
+
+_GUARDIAN_ITEM_WITHOUT_THUMBNAIL = {
+    "id": "society/gp-shortage-2",
+    "webTitle": "Second GP article",
+    "webUrl": "https://theguardian.com/gp-shortage-2",
+    "webPublicationDate": "2024-01-01T00:00:00Z",
+    "sectionName": "Society",
+    "fields": {
+        "trailText": "Another article.",
+        "bodyText": "No thumbnail here.",
+        "byline": "Jane Reporter",
+    },
+}
+
+
+class TestImageFetching:
+    """Tests for Guardian thumbnail extraction and OG-image scraping."""
+
+    # ── Guardian thumbnail + byline ───────────────────────────────────────────
+
+    @patch("agents.researcher.validate_sources", side_effect=_pass_through_validate)
+    @patch("agents.researcher.client.chat.completions.create")
+    @patch("agents.researcher.httpx.get")
+    def test_guardian_source_extracts_thumbnail_and_byline(
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
+    ):
+        """Guardian item with fields.thumbnail → source.image_url + image_credit_author populated."""
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
+        monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
+        monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+
+        # Return 7 Guardian results (enough to pass MIN_OK_SOURCES=5)
+        # — the first has a thumbnail
+        results_with_thumbnail = [_GUARDIAN_ITEM_WITH_THUMBNAIL] + _MANY_GUARDIAN_RESULTS[:6]
+
+        mock_get.return_value = MagicMock(
+            json=MagicMock(return_value={"response": {"results": results_with_thumbnail}}),
+            raise_for_status=MagicMock(return_value=None),
+        )
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=json.dumps({
+                "key_facts": ["F1"], "statistics": [], "ahpra_context": "ctx",
+                "additional_sources": [],
+            })))],
+            usage=MagicMock(total_tokens=500),
+        )
+
+        brief = research_topic(_make_topic())
+
+        # Find the Guardian source with a thumbnail
+        guardian_with_img = next(
+            (s for s in brief.sources if s.image_url is not None), None
+        )
+        assert guardian_with_img is not None, "Expected at least one source with image_url"
+        assert guardian_with_img.image_url == "https://i.guim.co.uk/img/media/abc123/master/1200.jpg"
+        assert guardian_with_img.image_credit_publisher == "The Guardian"
+        assert guardian_with_img.image_credit_author == "Mike Bowers/AAP"
+        assert guardian_with_img.image_alt == "GP shortage worsens in rural Australia"
+
+    @patch("agents.researcher.validate_sources", side_effect=_pass_through_validate)
+    @patch("agents.researcher.client.chat.completions.create")
+    @patch("agents.researcher.httpx.get")
+    def test_guardian_source_without_thumbnail_leaves_image_url_none(
+        self, mock_get, mock_create, mock_validate, monkeypatch, tmp_path
+    ):
+        """Guardian item without fields.thumbnail → image_url stays None."""
+        monkeypatch.setattr("agents.researcher.GUARDIAN_API_KEY", "gkey")
+        monkeypatch.setattr("agents.researcher.UNSPLASH_ACCESS_KEY", "")
+        monkeypatch.setattr("agents.researcher.USED_IMAGES_LOG", tmp_path / "used.json")
+
+        results_no_thumbnail = [_GUARDIAN_ITEM_WITHOUT_THUMBNAIL] + _MANY_GUARDIAN_RESULTS[:6]
+
+        mock_get.return_value = MagicMock(
+            json=MagicMock(return_value={"response": {"results": results_no_thumbnail}}),
+            raise_for_status=MagicMock(return_value=None),
+        )
+        mock_create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content=json.dumps({
+                "key_facts": [], "statistics": [], "ahpra_context": "",
+                "additional_sources": [],
+            })))],
+            usage=MagicMock(total_tokens=500),
+        )
+
+        brief = research_topic(_make_topic())
+
+        # The item without thumbnail must have image_url=None
+        no_thumb_source = next(
+            (s for s in brief.sources if s.url == "https://theguardian.com/gp-shortage-2"),
+            None,
+        )
+        if no_thumb_source is not None:
+            assert no_thumb_source.image_url is None
+            assert no_thumb_source.image_credit_publisher is None
+            assert no_thumb_source.image_credit_author is None
+
+    # ── OG image scraper unit tests ───────────────────────────────────────────
+
+    @patch("agents.researcher.httpx.get")
+    def test_og_image_scraped_for_abc_source(self, mock_get):
+        """_scrape_og_image returns image_url when og:image meta tag present."""
+        html = (
+            '<html><head>'
+            '<meta property="og:image" content="https://www.abc.net.au/img/photo.jpg">'
+            '<meta name="author" content="Jane Reporter">'
+            '</head></html>'
+        )
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_get.return_value = mock_resp
+
+        image_url, author, alt = _scrape_og_image("https://www.abc.net.au/some-article")
+
+        assert image_url == "https://www.abc.net.au/img/photo.jpg"
+        assert author == "Jane Reporter"
+
+    @patch("agents.researcher.httpx.get")
+    def test_og_image_skipped_for_unsplash_url(self, mock_get):
+        """_scrape_og_image returns None when og:image points to unsplash.com."""
+        html = (
+            '<html><head>'
+            '<meta property="og:image" content="https://unsplash.com/photos/abc123">'
+            '</head></html>'
+        )
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_get.return_value = mock_resp
+
+        image_url, author, alt = _scrape_og_image("https://somesite.com/article")
+
+        assert image_url is None
+
+    @patch("agents.researcher.httpx.get")
+    def test_og_scrape_handles_404_silently(self, mock_get):
+        """_scrape_og_image does not raise when the page returns 404."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_get.return_value = mock_resp
+
+        # Should not raise; all fields should be None
+        image_url, author, alt = _scrape_og_image("https://somesite.com/missing-page")
+        assert image_url is None
+        assert author is None
+        assert alt is None
+
+    @patch("agents.researcher.httpx.get")
+    def test_og_scrape_handles_network_exception_silently(self, mock_get):
+        """_scrape_og_image does not raise on network error."""
+        mock_get.side_effect = Exception("Connection refused")
+
+        image_url, author, alt = _scrape_og_image("https://somesite.com/article")
+        assert image_url is None
+
+    def test_is_blocked_image_url_blocks_unsplash(self):
+        assert _is_blocked_image_url("https://unsplash.com/photos/abc") is True
+
+    def test_is_blocked_image_url_blocks_quickchart(self):
+        assert _is_blocked_image_url("https://quickchart.io/chart?c=...") is True
+
+    def test_is_blocked_image_url_blocks_svg(self):
+        assert _is_blocked_image_url("https://example.com/logo.svg") is True
+
+    def test_is_blocked_image_url_allows_guardian_cdn(self):
+        assert _is_blocked_image_url("https://i.guim.co.uk/img/media/abc/1200.jpg") is False
+
+    def test_is_blocked_image_url_allows_abc_image(self):
+        assert _is_blocked_image_url("https://www.abc.net.au/img/photo.jpg") is False
+
+    @patch("agents.researcher.httpx.get")
+    def test_og_image_alt_scraped_when_present(self, mock_get):
+        """_scrape_og_image returns og:image:alt if present."""
+        html = (
+            '<html><head>'
+            '<meta property="og:image" content="https://www.abc.net.au/img/photo.jpg">'
+            '<meta property="og:image:alt" content="Doctors treating patients in a clinic">'
+            '</head></html>'
+        )
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_get.return_value = mock_resp
+
+        image_url, author, alt = _scrape_og_image("https://www.abc.net.au/some-article")
+        assert alt == "Doctors treating patients in a clinic"
+
+    @patch("agents.researcher.httpx.get")
+    def test_og_image_falls_back_to_twitter_image(self, mock_get):
+        """_scrape_og_image uses twitter:image when og:image is absent."""
+        html = (
+            '<html><head>'
+            '<meta name="twitter:image" content="https://www.racgp.org.au/img/article.jpg">'
+            '</head></html>'
+        )
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = html
+        mock_get.return_value = mock_resp
+
+        image_url, author, alt = _scrape_og_image("https://www.racgp.org.au/article")
+        assert image_url == "https://www.racgp.org.au/img/article.jpg"

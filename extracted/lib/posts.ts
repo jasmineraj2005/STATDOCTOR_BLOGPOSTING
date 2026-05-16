@@ -14,7 +14,11 @@ export type Source = {
   title: string
   url: string
   publisher: string
-  snippet: string
+  snippet?: string
+  image_url?: string | null
+  image_credit_publisher?: string | null
+  image_credit_author?: string | null
+  image_alt?: string | null
 }
 
 export type Post = {

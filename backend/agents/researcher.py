@@ -121,6 +121,96 @@ GUARDIAN_BASE = "https://content.guardianapis.com/search"
 UNSPLASH_BASE = "https://api.unsplash.com/search/photos"
 
 
+_OG_IMAGE_BLOCKLIST = (
+    "unsplash.com",
+    "quickchart.io",
+)
+
+_OG_SCRAPE_HEADERS = {
+    "User-Agent": "StatDoctorBot/1.0 (+https://statdoctor.app)",
+}
+
+
+def _is_blocked_image_url(url: str) -> bool:
+    """Return True if the URL is from a blocked source (stock / placeholders / SVG)."""
+    if not url:
+        return True
+    if url.endswith(".svg"):
+        return True
+    for blocked in _OG_IMAGE_BLOCKLIST:
+        if blocked in url:
+            return True
+    return False
+
+
+def _scrape_og_image(url: str) -> tuple[str | None, str | None, str | None]:
+    """Fetch a non-Guardian source URL and scrape OG/Twitter image + author meta.
+
+    Returns (image_url, author, alt_text). All may be None.
+    Silently ignores 4xx/5xx and network errors.
+    """
+    for attempt in range(2):
+        try:
+            r = httpx.get(
+                url,
+                headers=_OG_SCRAPE_HEADERS,
+                timeout=5,
+                follow_redirects=True,
+            )
+            if r.status_code >= 400:
+                # 4xx — skip, no retry
+                if r.status_code < 500:
+                    return None, None, None
+                # 5xx — retry once
+                if attempt == 0:
+                    continue
+                return None, None, None
+            html = r.text
+            break
+        except Exception:
+            return None, None, None
+    else:
+        return None, None, None
+
+    # Extract og:image / twitter:image
+    image_url: str | None = None
+    for pattern in (
+        r'<meta\s+property=["\']og:image["\']\s+content=["\'](https?://[^"\']+)["\']',
+        r'<meta\s+content=["\'](https?://[^"\']+)["\']\s+property=["\']og:image["\']',
+        r'<meta\s+name=["\']og:image["\']\s+content=["\'](https?://[^"\']+)["\']',
+        r'<meta\s+name=["\']twitter:image["\']\s+content=["\'](https?://[^"\']+)["\']',
+        r'<meta\s+property=["\']twitter:image["\']\s+content=["\'](https?://[^"\']+)["\']',
+    ):
+        m = re.search(pattern, html, re.IGNORECASE)
+        if m:
+            candidate = m.group(1)
+            if not _is_blocked_image_url(candidate):
+                image_url = candidate
+                break
+
+    # Extract og:image:alt
+    alt_text: str | None = None
+    m_alt = re.search(
+        r'<meta\s+property=["\']og:image:alt["\']\s+content=["\'](.*?)["\']',
+        html,
+        re.IGNORECASE,
+    )
+    if m_alt:
+        alt_text = m_alt.group(1).strip() or None
+
+    # Extract author meta
+    author: str | None = None
+    m_author = re.search(
+        r'<meta\s+name=["\']author["\']\s+content=["\'](.*?)["\']',
+        html,
+        re.IGNORECASE,
+    )
+    if m_author:
+        author = m_author.group(1).strip() or None
+
+    return image_url, author, alt_text
+
+
 def _search_guardian(query: str, n: int = 8) -> list[dict]:
     if not GUARDIAN_API_KEY:
         return []
@@ -128,7 +218,7 @@ def _search_guardian(query: str, n: int = 8) -> list[dict]:
         "q": query,
         "api-key": GUARDIAN_API_KEY,
         "page-size": n,
-        "show-fields": "trailText,bodyText",
+        "show-fields": "trailText,bodyText,thumbnail,byline",
         "order-by": "relevance",
         "section": "society|australia-news|business|science",
     }
@@ -183,8 +273,19 @@ def _fetch_unsplash_image(
 
 def _sources_to_dicts(sources: list[Source]) -> list[dict]:
     """Convert Source model instances to plain dicts for validate_sources."""
-    return [{"url": s.url, "title": s.title, "publisher": s.publisher, "snippet": s.snippet}
-            for s in sources]
+    return [
+        {
+            "url": s.url,
+            "title": s.title,
+            "publisher": s.publisher,
+            "snippet": s.snippet,
+            "image_url": s.image_url,
+            "image_credit_publisher": s.image_credit_publisher,
+            "image_credit_author": s.image_credit_author,
+            "image_alt": s.image_alt,
+        }
+        for s in sources
+    ]
 
 
 def _gather_sources(
@@ -367,23 +468,41 @@ Rules:
             fields = item.get("fields", {})
             trail = fields.get("trailText") or ""
             body_preview = (fields.get("bodyText") or "")[:400]
+            thumbnail = fields.get("thumbnail") or None
+            byline = fields.get("byline") or None
             guardian_sources.append(
                 Source(
                     title=item["webTitle"],
                     url=item["webUrl"],
                     publisher="The Guardian",
                     snippet=(trail or body_preview)[:250],
+                    image_url=thumbnail,
+                    image_credit_publisher="The Guardian" if thumbnail else None,
+                    image_credit_author=byline if thumbnail else None,
+                    image_alt=item["webTitle"] if thumbnail else None,
                 )
             )
 
         all_sources: list[Source] = list(guardian_sources)
         for s in data.get("additional_sources", [])[:5]:
+            src_publisher = s.get("publisher", "")
+            src_url = s.get("url", "")
+            # Scrape OG image for non-Guardian sources
+            og_image_url: str | None = None
+            og_author: str | None = None
+            og_alt: str | None = None
+            if src_url:
+                og_image_url, og_author, og_alt = _scrape_og_image(src_url)
             all_sources.append(
                 Source(
                     title=s.get("title", ""),
-                    url=s.get("url", ""),
-                    publisher=s.get("publisher", ""),
+                    url=src_url,
+                    publisher=src_publisher,
                     snippet=s.get("snippet", ""),
+                    image_url=og_image_url,
+                    image_credit_publisher=src_publisher if og_image_url else None,
+                    image_credit_author=og_author if og_image_url else None,
+                    image_alt=(og_alt or s.get("title", "")) if og_image_url else None,
                 )
             )
 
@@ -400,6 +519,10 @@ Rules:
                     url=d.get("url", ""),
                     publisher=d.get("publisher", ""),
                     snippet=d.get("snippet", ""),
+                    image_url=d.get("image_url"),
+                    image_credit_publisher=d.get("image_credit_publisher"),
+                    image_credit_author=d.get("image_credit_author"),
+                    image_alt=d.get("image_alt"),
                 )
                 for d in ok_dicts
             ]
@@ -425,12 +548,18 @@ Rules:
                     fields = item.get("fields", {})
                     trail = fields.get("trailText") or ""
                     body_preview = (fields.get("bodyText") or "")[:400]
+                    thumbnail = fields.get("thumbnail") or None
+                    byline = fields.get("byline") or None
                     new_guardian.append(
                         Source(
                             title=item["webTitle"],
                             url=url,
                             publisher="The Guardian",
                             snippet=(trail or body_preview)[:250],
+                            image_url=thumbnail,
+                            image_credit_publisher="The Guardian" if thumbnail else None,
+                            image_credit_author=byline if thumbnail else None,
+                            image_alt=item["webTitle"] if thumbnail else None,
                         )
                     )
                 all_sources = all_sources + new_guardian
