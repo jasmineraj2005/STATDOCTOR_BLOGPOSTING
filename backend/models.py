@@ -69,7 +69,11 @@ class Source(BaseModel):
     title: str
     url: str
     publisher: str
-    snippet: str
+    snippet: str = ""
+    image_url: Optional[str] = None
+    image_credit_publisher: Optional[str] = None  # e.g., "The Guardian"
+    image_credit_author: Optional[str] = None      # e.g., "Mike Bowers/AAP" — from Guardian byline if available
+    image_alt: Optional[str] = None                # for a11y; scrape from <img alt> or fallback to article title
 
 
 class GuardianArticle(BaseModel):

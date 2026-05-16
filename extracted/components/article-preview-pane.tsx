@@ -500,11 +500,12 @@ export default function ArticlePreviewPane({ post }: { post: Post }) {
   const { before, sources } = splitAtFaq(processed)
   const contentSections = splitByH2(before)
 
-  // Admin preview: no fetched source images — render gallery from source metadata only
-  // (imageUrl/inlineImages will be empty stubs; gallery hides itself when no images)
+  // Build SourceWithImage from post.sources, wiring up the new image_url + credit fields.
+  // Legacy `imageUrl` (camelCase) is set to null — the gallery component will fall back to
+  // the snake_case `image_url` field which comes directly from the JSON pipeline.
   const sourceImages: SourceWithImage[] = post.sources.map((s) => ({
     ...s,
-    imageUrl: null,
+    imageUrl: null,   // gallery resolves from s.image_url if imageUrl is null
     inlineImages: [],
   }))
 
