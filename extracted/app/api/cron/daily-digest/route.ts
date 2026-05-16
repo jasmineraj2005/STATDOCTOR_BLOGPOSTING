@@ -81,6 +81,19 @@ export async function GET(req: Request) {
       LIMIT 20
   `;
 
+  // URL-rejection flag counts (last 7 days) — sourced from ahpra_flags in posts.data.
+  // M1.T1-T3 stores SourceFlag objects {type, url, publisher, reason} in ahpra_flags.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+  type UrlFlagRow = { type: string; n: number };
+  const { rows: urlFlagRows } = await sql<UrlFlagRow>`
+    SELECT flag->>'type' AS type, COUNT(*)::int AS n
+      FROM posts,
+           jsonb_array_elements(data->'ahpra_flags') AS flag
+      WHERE data->>'generated_at' >= ${sevenDaysAgo}
+        AND flag->>'type' IN ('source_not_in_whitelist', 'source_unreachable')
+      GROUP BY flag->>'type'
+  `;
+
   const subject =
     alertRows.length > 0
       ? `[StatDoctor] Digest — ${alertRows.length} alert(s) pending`
@@ -92,6 +105,7 @@ export async function GET(req: Request) {
     statuses: statusRows,
     crons: cronRows,
     alerts: alertRows,
+    urlFlags: urlFlagRows,
     siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "",
   });
 
@@ -161,6 +175,7 @@ function renderDigest(d: {
     fails_total: number;
   }[];
   alerts: { id: number; ts: Date | string; kind: string; detail: string }[];
+  urlFlags: { type: string; n: number }[];
   siteUrl: string;
 }): string {
   const fmt = (v: Date | string | null) =>
@@ -191,6 +206,14 @@ function renderDigest(d: {
     ? `<p><a href="${esc(d.siteUrl)}/admin/posts">Open the review queue →</a></p>`
     : "";
 
+  const notInWhitelist = d.urlFlags.find((r) => r.type === "source_not_in_whitelist")?.n ?? 0;
+  const unreachable = d.urlFlags.find((r) => r.type === "source_unreachable")?.n ?? 0;
+  const totalRejected = notInWhitelist + unreachable;
+  const urlValidationLine =
+    totalRejected === 0
+      ? "URL validation (last 7 days): no rejections — pipeline producing clean sources ✓"
+      : `URL validation (last 7 days): ${totalRejected} URLs rejected — ${notInWhitelist} not in whitelist, ${unreachable} unreachable`;
+
   return `<!doctype html>
 <html><body style="font-family: -apple-system, system-ui, sans-serif; color: #1a1a2e; max-width: 720px; margin: 0 auto; padding: 24px;">
   <h1 style="font-size: 22px; margin: 0 0 16px;">StatDoctor editorial digest</h1>
@@ -210,6 +233,9 @@ function renderDigest(d: {
     <thead><tr><th align="left">Job</th><th align="left">Last OK</th><th align="left">Last fail</th><th align="left">Fails total</th><th align="left">Last detail</th></tr></thead>
     <tbody>${crons}</tbody>
   </table>
+
+  <h2 style="font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 6px; margin-top: 24px;">Source quality</h2>
+  <p style="font-size: 13px; margin: 4px 0;">${esc(urlValidationLine)}</p>
 
   ${inboxLink}
 </body></html>`;
