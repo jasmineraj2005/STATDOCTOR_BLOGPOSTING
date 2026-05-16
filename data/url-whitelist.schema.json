@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/jasmineraj2005/STATDOCTOR_BLOGPOSTING/blob/main/data/url-whitelist.schema.json",
+  "title": "URL Whitelist",
+  "description": "Single source of truth for approved source domains used by both the Python backend pipeline and the TypeScript admin dashboard.",
+  "type": "object",
+  "required": ["version", "schema_url", "updated_at", "domains"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Schema version number — increment when making breaking changes to the structure.",
+      "minimum": 1
+    },
+    "schema_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical URL of this JSON Schema file."
+    },
+    "updated_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "ISO 8601 date (YYYY-MM-DD) of the last modification to this whitelist."
+    },
+    "domains": {
+      "type": "array",
+      "description": "Ordered list of approved source domains.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/DomainEntry"
+      }
+    }
+  },
+  "definitions": {
+    "DomainEntry": {
+      "type": "object",
+      "required": ["domain", "tier", "rationale", "added_at"],
+      "additionalProperties": false,
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Bare domain name without protocol or trailing slash (e.g. 'theguardian.com').",
+          "pattern": "^[a-z0-9]([a-z0-9\\-\\.]*[a-z0-9])?$"
+        },
+        "tier": {
+          "type": "string",
+          "description": "Closed classification tier for the domain.",
+          "enum": [
+            "gov-au",
+            "gov-nz",
+            "peer-reviewed",
+            "mainstream-news",
+            "mainstream-aus",
+            "professional-body"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "description": "One-sentence explanation of why this domain is on the whitelist and how it is used.",
+          "minLength": 20
+        },
+        "added_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "ISO 8601 date (YYYY-MM-DD) when this domain was first added to the whitelist."
+        }
+      }
+    }
+  }
+}
