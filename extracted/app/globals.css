@@ -660,6 +660,34 @@ nextjs-portal,
   font-style: normal;
 }
 
+/* ── Pro Tip ── insider/negotiation advice, distinct from generic INFO */
+.callout-pro-tip {
+  background: hsl(160, 35%, 96%);
+  border: 1px solid hsl(160, 40%, 80%);
+  border-left: 4px solid hsl(160, 60%, 38%);
+  border-radius: 0.5rem;
+  border-top-right-radius: 1.25rem;
+  border-bottom-right-radius: 1.25rem;
+  overflow: hidden;
+  margin: 1.5rem 0;
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.callout-pro-tip:hover {
+  box-shadow: 0 8px 32px -4px hsl(160 60% 38% / 0.18);
+  transform: translateY(-2px) scale(1.01);
+}
+.callout-pro-tip .callout-header-band {
+  background: hsl(160, 60%, 38%);
+  color: #ffffff;
+}
+.callout-pro-tip p {
+  color: var(--sd-foreground);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin: 0;
+  font-weight: 500;
+}
+
 /* ── Case Study ── */
 .callout-case-study {
   background: #ffffff;
