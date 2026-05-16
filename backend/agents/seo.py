@@ -64,7 +64,7 @@ _TITLE_CADENCES: dict[str, list[str]] = {
 # Dr Anu is both author and medical reviewer for all StatDoctor content.
 _DR_ANU_PERSON = {
     "@type": "Person",
-    "name": "Dr Anu Baldev",
+    "name": "Dr Anu Ganugapati",
     "url": "https://statdoctor.net/about",
     "jobTitle": "Medical Director",
     "affiliation": {"@type": "Organization", "name": "StatDoctor"},
