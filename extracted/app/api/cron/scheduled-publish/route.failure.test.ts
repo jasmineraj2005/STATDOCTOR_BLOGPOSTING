@@ -40,12 +40,17 @@ vi.mock("@/lib/admin/publish", () => ({
   publishPost: vi.fn(),
 }));
 
+vi.mock("@/lib/alerts/resend", () => ({
+  dispatchAlert: vi.fn().mockResolvedValue({ emailSent: false, alertId: "mock-alert-id" }),
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { sql, isDbConfigured } from "@/lib/admin/db";
 import { recordCronRun } from "@/lib/admin/cron";
 import { upsertPost, logAudit } from "@/lib/admin/store";
 import { publishPost } from "@/lib/admin/publish";
+import { dispatchAlert } from "@/lib/alerts/resend";
 import { GET } from "./route";
 
 const mockSql = sql as unknown as ReturnType<typeof vi.fn>;
@@ -54,6 +59,7 @@ const mockRecordCronRun = recordCronRun as unknown as ReturnType<typeof vi.fn>;
 const mockUpsertPost = upsertPost as unknown as ReturnType<typeof vi.fn>;
 const mockLogAudit = logAudit as unknown as ReturnType<typeof vi.fn>;
 const mockPublishPost = publishPost as unknown as ReturnType<typeof vi.fn>;
+const mockDispatchAlert = dispatchAlert as unknown as ReturnType<typeof vi.fn>;
 
 // ── Shared fixture ────────────────────────────────────────────────────────────
 
@@ -100,6 +106,8 @@ beforeEach(() => {
   mockUpsertPost.mockReset();
   mockLogAudit.mockReset();
   mockPublishPost.mockReset();
+  mockDispatchAlert.mockReset();
+  mockDispatchAlert.mockResolvedValue({ emailSent: false, alertId: "mock-alert-id" });
 
   // Common base: DB configured, CRON_SECRET unset (no auth gate).
   delete process.env.CRON_SECRET;
@@ -132,13 +140,13 @@ describe("scheduled-publish cron — failure handling", () => {
       expect(body).toMatchObject({ ok: false, error: "publish_failed" });
     });
 
-    it("rolls back post status to 'scheduled' via second upsertPost call", async () => {
+    it("rolls back post status to 'publish_failed' via second upsertPost call (M7: was 'scheduled' pre-M7)", async () => {
       await GET(makeForceRequest());
       // First upsertPost call: sets status='published' (optimistic update).
-      // Second upsertPost call: rolls back to status='scheduled'.
+      // Second upsertPost call: rolls back to status='publish_failed' so operator can retry.
       expect(mockUpsertPost).toHaveBeenCalledTimes(2);
       const rollbackArg = mockUpsertPost.mock.calls[1][1] as { status: string };
-      expect(rollbackArg.status).toBe("scheduled");
+      expect(rollbackArg.status).toBe("publish_failed");
     });
 
     it("logs a publish-failed audit event", async () => {
@@ -169,44 +177,60 @@ describe("scheduled-publish cron — failure handling", () => {
 
   describe("publishPost throws (e.g. uncaught network error mid-run)", () => {
     /**
-     * BEHAVIOURAL GAP SURFACED:
-     * The current route does NOT wrap publishPost in a try/catch. If publishPost
-     * throws (vs. returning { ok: false }), the exception propagates uncaught —
-     * no rollback upsert, no audit event, no failed cron_run record.
-     * /api/health would remain stale rather than reporting last_run_failed.
-     *
-     * Fix planned for M7: wrap the publishPost + upsertPost block in try/catch
-     * and call recordCronRun("scheduled-publish", false, error.message) in the
-     * catch handler.
-     *
-     * These tests are skipped rather than testing the broken behaviour.
+     * M7 FIX: The route now wraps publishPost in a try/catch. If publishPost
+     * throws (vs. returning { ok: false }), the catch handler:
+     *  1. Rolls back post status to 'publish_failed'
+     *  2. Logs a 'publish-failed' audit event
+     *  3. Calls recordCronRun("scheduled-publish", false, ...) so cron_runs.last_fail is updated
+     *  4. Calls dispatchAlert for real-time notification
+     *  5. Returns HTTP 500 with { ok: false, error: "publish_failed" }
      */
-    it.skip(
-      "SKIP: publishPost throw — route does not catch unhandled publishPost throws; " +
-        "recordCronRun(false) is NOT called, leaving cron_runs stale. Fix in M7.",
-      async () => {
-        mockPublishPost.mockRejectedValue(new Error("network timeout mid-publish"));
-        // If the fix were in place:
-        const res = await GET(makeForceRequest());
-        expect(res.status).toBe(500);
-        expect(mockRecordCronRun).toHaveBeenCalledWith(
-          "scheduled-publish",
-          false,
-          expect.stringContaining("network timeout"),
-        );
-      },
-    );
+    it("publishPost throw — route catches the throw and records cron failure (M7 fix)", async () => {
+      mockPublishPost.mockRejectedValue(new Error("network timeout mid-publish"));
+      const res = await GET(makeForceRequest());
+      expect(res.status).toBe(500);
+      const body = await res.json();
+      expect(body).toMatchObject({ ok: false, error: "publish_failed" });
+      expect(mockRecordCronRun).toHaveBeenCalledWith(
+        "scheduled-publish",
+        false,
+        expect.stringContaining("network timeout"),
+      );
+    });
 
-    it.skip(
-      "SKIP: publishPost throw — no audit event logged when publishPost throws uncaught. Fix in M7.",
-      async () => {
-        mockPublishPost.mockRejectedValue(new Error("network timeout mid-publish"));
-        await GET(makeForceRequest());
-        expect(mockLogAudit).toHaveBeenCalledWith(
-          expect.objectContaining({ action: "publish-failed" }),
-        );
-      },
-    );
+    it("publishPost throw — audit event logged with action=publish-failed (M7 fix)", async () => {
+      mockPublishPost.mockRejectedValue(new Error("network timeout mid-publish"));
+      await GET(makeForceRequest());
+      expect(mockLogAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "publish-failed" }),
+      );
+    });
+
+    it("publishPost throw — post is rolled back to publish_failed status (M7 fix)", async () => {
+      mockPublishPost.mockRejectedValue(new Error("network timeout mid-publish"));
+      await GET(makeForceRequest());
+      // Second upsertPost call rolls back with publish_failed.
+      expect(mockUpsertPost).toHaveBeenCalledTimes(2);
+      const rollbackArg = mockUpsertPost.mock.calls[1][1] as { status: string };
+      expect(rollbackArg.status).toBe("publish_failed");
+    });
+
+    it("publishPost throw — dispatchAlert is called with severity=error (M7 fix)", async () => {
+      mockPublishPost.mockRejectedValue(new Error("network timeout mid-publish"));
+      await GET(makeForceRequest());
+      expect(mockDispatchAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: "publish_failed", severity: "error" }),
+      );
+    });
+
+    it("recordCronRun(false) is called exactly once when publishPost throws — no success call", async () => {
+      mockPublishPost.mockRejectedValue(new Error("connection reset"));
+      await GET(makeForceRequest());
+      const failCalls = mockRecordCronRun.mock.calls.filter((c) => c[1] === false);
+      const successCalls = mockRecordCronRun.mock.calls.filter((c) => c[1] === true);
+      expect(failCalls).toHaveLength(1);
+      expect(successCalls).toHaveLength(0);
+    });
   });
 
   describe("empty scheduled queue — still records a successful cron run", () => {

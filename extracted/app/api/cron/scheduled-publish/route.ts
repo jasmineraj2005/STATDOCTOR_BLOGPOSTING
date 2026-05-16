@@ -3,6 +3,7 @@ import { sql, isDbConfigured } from "@/lib/admin/db";
 import { recordCronRun } from "@/lib/admin/cron";
 import { upsertPost, logAudit } from "@/lib/admin/store";
 import { publishPost } from "@/lib/admin/publish";
+import { dispatchAlert } from "@/lib/alerts/resend";
 import type { Post } from "@/lib/admin/types";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +89,33 @@ export async function GET(req: Request) {
 
   // Mark published in DB first, then push to the website repo.
   await upsertPost(file, next);
-  const result = await publishPost(file);
+
+  let result;
+  try {
+    result = await publishPost(file);
+  } catch (err) {
+    // publishPost threw an unhandled error (network error, unexpected exception, etc.)
+    // Roll back to 'publish_failed' so the operator can retry via POST /api/posts/[slug]/retry-publish.
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    await upsertPost(file, { ...row.data, status: "publish_failed" });
+    await logAudit({
+      ts: now,
+      slug: row.slug,
+      action: "publish-failed",
+      detail: `publishPost threw unexpectedly — ${errorMessage}`,
+    });
+    await recordCronRun("scheduled-publish", false, errorMessage);
+    await dispatchAlert({
+      kind: "publish_failed",
+      severity: "error",
+      detail: `publishPost threw for slug=${row.slug}: ${errorMessage}`,
+      context: { slug: row.slug },
+    });
+    return NextResponse.json(
+      { ok: false, error: "publish_failed", detail: errorMessage },
+      { status: 500 },
+    );
+  }
 
   if (result.ok) {
     await logAudit({
@@ -104,8 +131,8 @@ export async function GET(req: Request) {
     );
     return NextResponse.json({ ok: true, published: row.slug });
   } else {
-    // Roll back to 'scheduled' so the next slot retries automatically.
-    await upsertPost(file, { ...row.data, status: "scheduled" });
+    // Roll back to 'publish_failed' so operator can retry; next slot won't auto-pick it up.
+    await upsertPost(file, { ...row.data, status: "publish_failed" });
     await logAudit({
       ts: now,
       slug: row.slug,
@@ -113,6 +140,12 @@ export async function GET(req: Request) {
       detail: `scheduled publish handoff failed — ${result.detail}`,
     });
     await recordCronRun("scheduled-publish", false, result.detail);
+    await dispatchAlert({
+      kind: "publish_failed",
+      severity: "error",
+      detail: `Publish failed for slug=${row.slug}: ${result.detail}`,
+      context: { slug: row.slug },
+    });
     return NextResponse.json(
       { ok: false, error: "publish_failed", detail: result.detail },
       { status: 500 },
