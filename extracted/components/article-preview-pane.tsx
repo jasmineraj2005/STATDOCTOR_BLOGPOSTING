@@ -204,6 +204,22 @@ function buildMdComponents(sourceCount: number): Components {
         )
       }
 
+      // [PRO TIP] — insider/negotiation advice (separate from generic INFO/TIP)
+      if (text.match(/\[PRO TIP\]/i)) {
+        const filtered = stripMarker(children, /\[PRO TIP\]\s*/i)
+        return (
+          <div className="callout-pro-tip">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>💡</span>
+                <span>Pro tip</span>
+              </div>
+            </div>
+            <div className="callout-content">{filtered}</div>
+          </div>
+        )
+      }
+
       // [INFO] or [TIP]
       if (text.match(/\[INFO\]|\[TIP\]/i)) {
         const filtered = stripMarker(children, /\[(INFO|TIP)\]\s*/i)

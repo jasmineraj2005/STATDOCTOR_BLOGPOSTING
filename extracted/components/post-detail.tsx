@@ -73,7 +73,7 @@ function extractUrl(text: string): string | null {
 // so stripMarker can reliably detect and remove the standalone marker.
 function preprocessCalloutMarkers(md: string): string {
   return md.replace(
-    /^(> ?)\[(KEY TAKEAWAY|INFO|TIP|AU|NZ|INTERESTING FACT|INSIGHT|DONT WORRY|REASSURANCE|CASE STUDY:[^\]]+)\] +(.+)$/gm,
+    /^(> ?)\[(KEY TAKEAWAY|INFO|TIP|PRO TIP|AU|NZ|INTERESTING FACT|INSIGHT|DONT WORRY|REASSURANCE|CASE STUDY:[^\]]+)\] +(.+)$/gm,
     (_match, prefix, type, content) =>
       `${prefix}[${type}]\n${prefix}\n${prefix}${content}`
   )
@@ -247,6 +247,24 @@ export default function PostDetail({
               <div className="callout-header-band-left">
                 <span>✓</span>
                 <span>Key Takeaway</span>
+              </div>
+            </div>
+            <div className="callout-content">
+              {filtered}
+            </div>
+          </div>
+        )
+      }
+
+      // [PRO TIP] — insider/negotiation advice (distinct from generic INFO/TIP)
+      if (text.match(/\[PRO TIP\]/i)) {
+        const filtered = stripMarker(children, /\[PRO TIP\]\s*/i)
+        return (
+          <div className="callout-pro-tip">
+            <div className="callout-header-band">
+              <div className="callout-header-band-left">
+                <span>💡</span>
+                <span>Pro tip</span>
               </div>
             </div>
             <div className="callout-content">

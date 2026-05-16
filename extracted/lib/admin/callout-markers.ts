@@ -16,7 +16,7 @@
  */
 export function preprocessCalloutMarkers(md: string): string {
   return md.replace(
-    /^(> ?)\[(KEY TAKEAWAY|INFO|TIP|AU|NZ|INTERESTING FACT|INSIGHT|DONT WORRY|REASSURANCE|CASE STUDY:[^\]]+)\] +(.+)$/gm,
+    /^(> ?)\[(KEY TAKEAWAY|INFO|TIP|PRO TIP|AU|NZ|INTERESTING FACT|INSIGHT|DONT WORRY|REASSURANCE|CASE STUDY:[^\]]+)\] +(.+)$/gm,
     (_match, prefix, type, content) =>
       `${prefix}[${type}]\n${prefix}\n${prefix}${content}`
   )

@@ -29,6 +29,21 @@ describe("preprocessCalloutMarkers", () => {
     expect(result).toContain("> Smart tip content here.");
   });
 
+  it("handles [PRO TIP] marker — insider/negotiation advice", () => {
+    // Real example: indemnity-coverage advice for regional locum shifts.
+    const input =
+      "> [PRO TIP] Always negotiate the indemnity coverage before accepting a remote shift — many regional hospitals assume locums carry their own.";
+    const result = preprocessCalloutMarkers(input);
+    expect(result).toContain("> [PRO TIP]");
+    expect(result).toContain(
+      "> Always negotiate the indemnity coverage before accepting a remote shift — many regional hospitals assume locums carry their own.",
+    );
+    // Marker line stripped of content
+    const lines = result.split("\n");
+    const markerLine = lines.find((l) => l.includes("[PRO TIP]"))!;
+    expect(markerLine.replace("> [PRO TIP]", "").trim()).toBe("");
+  });
+
   it("handles [AU] marker", () => {
     const input = "> [AU] Australian context here.";
     const result = preprocessCalloutMarkers(input);
