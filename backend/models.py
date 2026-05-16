@@ -104,6 +104,9 @@ class ResearchBrief(BaseModel):
     image_description: Optional[str] = None
     chart_url: Optional[str] = None  # Quickchart.io URL built from statistics
     inline_images: list[str] = []  # Additional Unsplash URLs for in-article placement
+    # Abort sentinel — set when research could not be completed safely
+    aborted: bool = False
+    abort_reason: Optional[str] = None  # "too_few_valid_sources" | "budget_exceeded"
 
 
 class BlogPost(BaseModel):
