@@ -189,6 +189,98 @@ status='published'
 
 ---
 
+## URL validation (M1)
+
+### What URL validation does
+
+The AI pipeline sometimes fabricates source URLs — in one incident, five completely made-up links appeared in a fuel-prices article. To prevent AHPRA-byline credibility damage, every URL in an article is now checked at ingest time against two gates: it must (1) match a whitelisted domain and (2) return a 2xx or 3xx status on a HEAD request. Any URL failing either check is dropped and recorded in `ahpra_flags` on the `posts` row with `type: "source_not_in_whitelist"` or `type: "source_unreachable"`. Once M1.T5 lands, if the surviving source count falls below 5 after these drops, the article is rejected entirely at ingest — it never enters the review queue.
+
+---
+
+### Where the whitelist lives
+
+**`data/url-whitelist.json`** is the single source of truth — read by both the Python validator (`backend/validation/urls.py`) and the TypeScript mirror (`extracted/lib/admin/url-validator.ts`). It ships with 26 initial domains across 6 tiers:
+
+| Tier | Examples |
+|---|---|
+| `gov-au` | aph.gov.au, health.gov.au, ahpra.gov.au |
+| `gov-nz` | health.govt.nz |
+| `peer-reviewed` | pubmed.ncbi.nlm.nih.gov, cochranelibrary.com |
+| `mainstream-news` | abc.net.au, bbc.com, reuters.com |
+| `mainstream-aus` | smh.com.au, theage.com.au |
+| `professional-body` | ama.com.au, racgp.org.au |
+
+Schema: `data/url-whitelist.schema.json`.
+
+---
+
+### How to add a new domain to the whitelist
+
+1. Open `data/url-whitelist.json`.
+2. Add a new object to `domains[]`:
+   ```json
+   {
+     "domain": "example.org.au",
+     "tier": "professional-body",
+     "rationale": "Peak body for X — authoritative primary source for Y topic.",
+     "added_at": "2026-05-16"
+   }
+   ```
+   Rules: `domain` is bare (no `https://`, no `www.`). `tier` must be one of the six values above. `rationale` is one sentence explaining WHY we trust it, not what it is.
+3. **Open a PR — do not push directly to main.** The whitelist is the security boundary. It requires a review before merge.
+4. CI will run `pytest test_url_whitelist_data.py` (Python schema check) and `vitest url-whitelist-data.test.ts` (TS schema check) — both must pass.
+5. CI will also run the cross-language drift tests (`test_url_validation_drift.py` / `url-validator-drift.test.ts`) to catch any subdomain edge-case discrepancy between the two validators.
+
+---
+
+### How to read URL-rejection telemetry
+
+**Daily digest (22:00 UTC inbox):** from M1.T10, the email includes a summary line:
+
+```
+URL validation (last 7 days): N URLs rejected — M not in whitelist, K unreachable
+```
+
+**Per-article — SQL:**
+
+```sql
+-- Articles with at least one "not in whitelist" rejection
+SELECT slug, ahpra_flags
+FROM posts
+WHERE jsonb_path_exists(ahpra_flags, '$[*] ? (@.type == "source_not_in_whitelist")');
+
+-- Articles with at least one unreachable-source rejection
+SELECT slug, ahpra_flags
+FROM posts
+WHERE jsonb_path_exists(ahpra_flags, '$[*] ? (@.type == "source_unreachable")');
+```
+
+**Admin dashboard:** flags surface in the per-article review page at `/admin/posts/[slug]`. Each flag shows the rejected URL and the reason.
+
+---
+
+### Stuck article? URL flags on a post that should approve
+
+1. Open `/admin/posts/[slug]`. Read the flags panel.
+2. **`source_not_in_whitelist`:** the domain isn't whitelisted.
+   - If it's a genuinely trustworthy source that matches the editorial standard: add the domain via the PR flow above, then re-run the article through ingest (`/api/admin/ingest`).
+   - If it's marginal or low-quality: the pipeline should be citing better sources — replace the URL in the article, or reject and regenerate.
+3. **`source_unreachable`:** the HEAD check returned 4xx/5xx or timed out.
+   - Confirm the source is actually gone (open it in a browser).
+   - If gone: remove it from the article OR swap in an equivalent source that's already whitelisted.
+   - If it's flaky / temporarily down: re-run ingest during off-peak hours.
+4. **Suspected validator bug** (domain is whitelisted but still flagged): open a GitHub issue with the exact URL and flag JSON. Fall back to manual approval only after you've independently verified the URL loads correctly in a browser.
+
+---
+
+### Anti-patterns
+
+- **Don't disable the validator to ship faster.** The entire point is preventing fabricated sources reaching AHPRA-bylined articles. A bad URL in a published post is reputational damage that can't be un-done by reverting code.
+- **Don't add a domain because one article cites it.** The bar for whitelist inclusion is: multiple articles would reasonably cite this source, AND it is editorially authoritative. One-off citation → find an equivalent source that's already whitelisted.
+- **Don't push whitelist changes directly to main.** The `domains[]` list is a security boundary. Every addition needs a PR review, even if you wrote the initial list.
+
+---
+
 ## Runbook — what to check if X breaks
 
 ### Daily digest never arrives
