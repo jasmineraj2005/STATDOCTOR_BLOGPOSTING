@@ -24,6 +24,13 @@ describe("bannerMessage", () => {
     expect(msg).toContain("30");
   });
 
+  it("Given cron_stale with absurd age (NULL last_ok COALESCED to 1970), When called, Then says 'never run'", () => {
+    const msg = bannerMessage({ kind: "cron_stale", cronName: "seo-snapshot", ageHours: 494148 });
+    expect(msg).toContain("seo-snapshot");
+    expect(msg).toMatch(/never run successfully/i);
+    expect(msg).not.toContain("494148");
+  });
+
   it("Given stale_review days=10, When called, Then mentions day count", () => {
     const msg = bannerMessage({ kind: "stale_review", daysSinceLastReview: 10 });
     expect(msg).toContain("10 days");
