@@ -1,0 +1,29 @@
+name: Cron — sunday-reminder
+
+# Sunday 07:00 AEST review reminder email.
+# 21:00 UTC Saturday = 07:00 AEST Sunday (= 08:00 AEDT during daylight-saving Oct–Apr).
+# Pipeline cron (cron-sunday-batch) fires at 20:00 UTC Sat; this reminder fires
+# 60 min later so the article generated in that batch has time to land + auto-heal
+# before the email goes out.
+
+on:
+  schedule:
+    - cron: "0 21 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/recover-and-alert
+        with:
+          name: sunday-reminder
+          url: ${{ secrets.CRON_BASE_URL }}/api/cron/sunday-reminder
+          token: ${{ secrets.CRON_SECRET }}
+          alert_url: ${{ secrets.CRON_BASE_URL }}/api/alerts/dispatch
+          alert_token: ${{ secrets.ALERT_INGEST_TOKEN }}
