@@ -6,9 +6,14 @@ name: Pipeline — generate an article
 
 on:
   schedule:
-    # Mon / Wed / Fri / Sat at 14:00 UTC — 4 articles per week so the CEO has
-    # a full Sunday batch to review.
+    # Mon / Wed / Fri / Sat at 14:00 UTC — staggered drafts that accumulate
+    # in pending_review across the week.
     - cron: "0 14 * * 1,3,5,6"
+    # Sunday morning Sydney batch: 20:00 UTC Saturday = 7:00 AEST Sunday
+    # (= 6:00 AEDT Sunday during daylight-saving Oct–Apr). The concurrency
+    # group below queues this if a Saturday 14:00 UTC run is still in flight,
+    # so we never collide on past_topics.json.
+    - cron: "0 20 * * 6"
   workflow_dispatch:
     inputs:
       mode:
@@ -55,5 +60,19 @@ jobs:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           INGEST_URL: ${{ secrets.INGEST_URL }}
           INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+          CRON_BASE_URL: ${{ secrets.CRON_BASE_URL }}
           MODE: ${{ inputs.mode }}
         run: python main.py
+
+      - name: Dispatch alert on pipeline failure
+        if: failure()
+        working-directory: .
+        env:
+          ALERT_URL: ${{ secrets.CRON_BASE_URL }}/api/alerts/dispatch
+          ALERT_TOKEN: ${{ secrets.ALERT_INGEST_TOKEN }}
+        run: |
+          curl --fail-with-body --max-time 30 -X POST \
+               -H "Content-Type: application/json" \
+               -H "Authorization: Bearer $ALERT_TOKEN" \
+               -d '{"kind":"pipeline_failed","severity":"critical","detail":"python main.py exited non-zero (see GH Actions log)"}' \
+               "$ALERT_URL" || echo "::error::Alert dispatch failed"

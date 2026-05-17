@@ -2,9 +2,125 @@
 
 Read this top-to-bottom **first**. Captures every load-bearing thing the previous chat carried that isn't already on disk.
 
-**Date:** 2026-05-16 (late-Saturday)
-**Branch:** `main` (fully synced; all 24 PRs from this session merged)
+**Date:** 2026-05-17 (Sunday — updated after M3 + PM hardening session)
+**Branch:** `feat/launch-hardening-fail-agents` (PM session — open PR to main)
 **Repo:** `STATDOCTOR_BLOGPOSTING` (admin + SEO + Python pipeline). `~/website/` is the separate client-facing repo — **never edit it from here**.
+
+---
+
+## 🆕 2026-05-17 PM update — Launch hardening + 4-layer fail-agent + 2 new pages
+
+Shipped on branch `feat/launch-hardening-fail-agents`. Plan at `~/.claude/plans/first-i-want-snuggly-otter.md`.
+
+**P0 launch blockers fixed:**
+- ✅ `<Banner state={…}/>` now renders at top of `/admin/posts` (M7 wiring complete).
+- ✅ `sunday-batch-report` moved off Vercel (no `vercel.json` existed) → `.github/workflows/cron-sunday-batch-report.yml`. Hobby plan 2-cron limit no longer in scope; everything runs on GH Actions.
+- 🟡 User action still required: set `RESEND_API_KEY` + `ALERT_INGEST_TOKEN` on Vercel + GitHub.
+
+**Fail-Agent system (4 layers shipped):**
+- **Layer A — Python validators** (`backend/agents/fail_agent.py`): per-agent output checks (researcher source count, writer word floor, AHPRA banned phrases, SEO schema). Wired into `pipeline.py` via `_check(run_id, name, result)`. All runs log to new `pipeline_runs` table (DDL appended to `extracted/lib/admin/schema.sql`). Observability-first; full auto-retry with re-prompting deferred until agents accept a `previous_failure` kwarg.
+- **Layer B — Workflow recovery** (`.github/actions/recover-and-alert/action.yml`): composite GH Action wraps every cron's curl. Retries once after 60s; on second failure POSTs to `/api/alerts/dispatch` (new endpoint, severity=error). Now used by all 6 workflows: pipeline, competitor-audit, daily-digest, scheduled-publish, seo-snapshot, sunday-batch-report. Canary uses it too.
+- **Layer C — Ingest gate** (`extracted/app/api/admin/ingest/gate.ts`): hard-gates word_count vs floor, sources ≥5, required schema fields. **Default = shadow mode** (logs only). Flip `FAIL_AGENT_INGEST_GATE=strict` on Vercel after smoke-testing real pipeline output that it passes (4-week observation window recommended).
+- **Layer D — Daily canary** (`extracted/app/api/cron/canary/route.ts` + `.github/workflows/cron-canary.yml`): 04:00 UTC. Synthetic article ingest → approve → publish-dry → delete. Slug prefix `__canary-` filtered from `/admin/posts` (and stats counters) via `slug NOT LIKE '__canary-%'` in `lib/admin/store.ts`. Any failure → `canary_failed` critical alert.
+
+**New dashboard pages:**
+- `/admin/stats` — CEO growth view. Recharts: weekly published bars + GSC/Bing impressions+clicks lines. Top-10 queries table. AEO citations counter. Empty-state when GSC propagating.
+- `/admin/features` — "How this is built" marketing/confidence page. Live counters (`/lib/admin/stats-summary.ts`). Sections: 5-agent pipeline, fail-agent 4 layers, compliance, SEO, operational, tests.
+
+**Test counts (before → after):**
+- Vitest: 289 → **327** (+38: banner-view, gate, gate integration, alerts/dispatch, canary fixture, canary route, stats-weekly, stats-summary)
+- Pytest: 40 → **57** (+17: test_fail_agent)
+- All Given/When/Then naming on new tests; existing imperative tests untouched.
+
+**New files (key):**
+- `extracted/components/admin/banner.tsx` + `banner-view.ts` + `banner.test.ts`
+- `extracted/app/api/admin/ingest/gate.ts` + `gate.test.ts`
+- `extracted/app/api/admin/pipeline-runs/route.ts`
+- `extracted/app/api/alerts/dispatch/route.ts` + `route.test.ts`
+- `extracted/app/api/cron/canary/route.ts` + `route.test.ts`
+- `extracted/app/admin/stats/page.tsx` + `_charts.tsx`
+- `extracted/app/admin/features/page.tsx`
+- `extracted/lib/admin/canary-fixture.ts` + test
+- `extracted/lib/admin/stats-weekly.ts` + test
+- `extracted/lib/admin/stats-summary.ts` + test
+- `backend/agents/fail_agent.py` + `tests/test_fail_agent.py`
+- `.github/actions/recover-and-alert/action.yml`
+- `.github/workflows/cron-canary.yml`, `cron-sunday-batch-report.yml`
+
+**Modified files (key):**
+- `extracted/app/admin/posts/page.tsx` — renders `<Banner/>` at top
+- `extracted/app/api/admin/ingest/route.ts` — runs `runIngestGate` after URL-whitelist gate
+- `extracted/lib/admin/store.ts` — `getAllPosts`/`getPendingPosts` filter `__canary-%` slugs; new `deletePostBySlug` helper
+- `extracted/lib/admin/schema.sql` — `pipeline_runs` DDL appended (idempotent)
+- `backend/pipeline.py` — wraps each agent with `_check(run_id, name, validate_*(out))`
+- All 5 cron workflows + `pipeline.yml` — use composite `recover-and-alert`
+
+**Still required (user actions):**
+- Set Vercel env: `RESEND_API_KEY`, `ALERT_INGEST_TOKEN` (random 32+ chars; also as GH secret).
+- After 1 week of real pipeline runs in shadow mode: review logs for `[fail-agent/layer-c]` warnings, then flip `FAIL_AGENT_INGEST_GATE=strict` to enforce 422.
+- Apply migration: `POST /api/admin/migrate` with the admin cookie to apply `pipeline_runs` DDL.
+- Open PR + merge: `feat/launch-hardening-fail-agents` → `main`.
+
+---
+
+## 🆕 2026-05-17 (AM) update — M3 session
+
+Walked Anu through `docs/superpowers/m3-domain-attach-runbook.md` end-to-end. Result: **M3 is functionally COMPLETE except one Google-side propagation delay**.
+
+**What got done:**
+- ✅ **Step 1** — GoDaddy CNAME `blog` → `cname.vercel-dns.com` (verified via dig)
+- ✅ **Step 2** — Domain attached on Vercel after multi-hour debug (see Vercel transfer saga below)
+- ✅ **Step 3a** — GSC Domain property `statdoctor.app` verified via TXT
+- ✅ **Step 3b** — GCP project `statdoctor-seo-aeo` created, service account `statdoctor-seo-pull@statdoctor-seo-aeo.iam.gserviceaccount.com` created, JSON key downloaded to repo root (gitignored — added `statdoctor-seo-*.json` + `*service-account*.json` + `*credentials*.json` patterns to `.gitignore`)
+- ⏳ **Step 3c** — Service account user-add in GSC keeps failing with "email not found" despite same-account, API enabled, SA can authenticate against the GSC API directly (verified via gcloud). **Pure Google directory propagation lag.** Retry tomorrow morning (task #11 in active session — but anyone reading this: just re-try `<https://search.google.com/search-console/users?resource_id=sc-domain%3Astatdoctor.app>` → Add user → SA email → Owner → Add).
+- 🟡 **Step 3d** — Sitemap submission deferred. No sitemap exists on either admin (`blog.statdoctor.app` is editorial backend by design) or Webflow (`statdoctor.app/sitemap.xml` returns 404). Either enable Webflow's built-in sitemap or wait for the Next.js website migration (the `docs/website-artefacts/sitemap.ts` is ready). Tracked.
+- ✅ **Step 4** — Bing Webmaster: `blog.statdoctor.app` verified via project-specific CNAME (`2bc84575cad12d980b8742bac612113e.blog` → `verify.bing.com`). Bing API key generated + saved.
+- ✅ **Step 5** — Vercel env vars set on `jasmine-rajs-projects/statdoctor-blogposting`:
+  - `GSC_SERVICE_ACCOUNT_JSON` (single-line JSON from `statdoctor-seo-aeo-c9b8578bdabe.json`)
+  - `GSC_SITE_URL` = `sc-domain:statdoctor.app`
+  - `BING_WEBMASTER_API_KEY` = (from Bing)
+  - `BING_SITE_URL` = `https://blog.statdoctor.app/`
+  - Redeploy triggered + green
+- 🟡 **Step 6** — Perplexity Publisher Program deferred until ~50 indexed articles (~August 2026). Email draft to `publishers@perplexity.ai` was prepared but user opted to skip until volume threshold met.
+- 🟡 **Step 7** — Anu to add personal Friday 2026-05-22 calendar reminder for `/admin/seo` dashboard verification.
+
+### 🛑 Vercel transfer saga (load-bearing context)
+
+Anu attempted to transfer the project to a fresh `stat-doctor` Pro Trial team (Pro plan, 11-day trial). What actually happened:
+
+1. Transfer flow on `jasmine-rajs-projects/statdoctor-blogposting → stat-doctor` Pro team was **blocked** — `jasmineraj2005` Vercel account isn't a member of the `stat-doctor` team (cross-account transfer requires source user to be a member of destination team).
+2. Anu instead **created new projects** on the `stat-doctor` Pro team via the import flow. Multiple empty projects were spawned (`statdoctor-blogposting`, `statdoctor-blogposting-three`, `statdoctor-blogposting-alpha`). Each had zero artefacts because **the new Pro team's Vercel GitHub App couldn't pull `jasmineraj2005/STATDOCTOR_BLOGPOSTING`** (cross-account permissions barrier). Vercel reported builds as "success" but they were no-op shells (404 on all paths).
+3. Also hit **Deployment Protection** on the Pro team blocking direct deployment URLs with 401 — disabled in Settings → Deployment Protection.
+4. Eventually deleted all stat-doctor projects and attached `blog.statdoctor.app` back to the **original `jasmine-rajs-projects/statdoctor-blogposting`** project. This is the working production target.
+
+**Resolved by:** removing the broken Pro-team duplicates → updating `_vercel.statdoctor.app` TXT to the jasmine-rajs project's new verification code → re-attaching domain.
+
+**The live production project remains `jasmine-rajs-projects/statdoctor-blogposting`** (Hobby plan). Functions fine — the only Vercel cron is `sunday-batch-report` (weekly), well within Hobby limits. If Pro is desired later, upgrade `jasmine-rajs-projects` directly OR invite jasmineraj2005 to the `stat-doctor` team as a member then retry the transfer.
+
+### Live status as of 2026-05-17 ~01:30 UTC
+
+| Probe | Result |
+|---|---|
+| `curl -sI https://blog.statdoctor.app/` | `HTTP/2 200` ✓ |
+| `curl https://blog.statdoctor.app/api/health` | `db: ok, 4/5 crons ok (seo-snapshot last_run_failed — expected until GSC SA added)` |
+| Pipeline cron (Sat 14:00 UTC) | Ran successfully 2026-05-16T14:47:54Z (1m58s) — one article in queue |
+| Daily digest, scheduled-publish, competitor-audit | All running on schedule, all green |
+| Vercel deployment | green, post-env-var redeploy |
+
+### Login note (Anu hit this today)
+
+Default admin creds are `anu@statdoctor.au` / `statdoctor@1` — **note the `.au`, not `.net`**. The handover's `DIGEST_EMAIL_TO` line uses `.net` (correct for email delivery) and Anu's real account is `.net`, but the login flow checks against `.au`. To change: set `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars in Vercel.
+
+### Today's known follow-ups (active task list)
+
+1. **Retry GSC SA user-add tomorrow morning** — `statdoctor-seo-pull@statdoctor-seo-aeo.iam.gserviceaccount.com` at <https://search.google.com/search-console/users?resource_id=sc-domain%3Astatdoctor.app>. Likely works after 6–24h propagation.
+2. **Friday 2026-05-22** — verification curls (§8 of m3-domain-attach-runbook.md) + open `/admin/seo` dashboard. Expect populated keyword table by then.
+3. **Apply to Perplexity Publishers** — when content crosses ~50 indexed articles (~Aug 2026). Email draft is in the chat transcript; resend with current article count.
+4. **Sitemap** — enable in Webflow OR ship Next.js website migration.
+
+### Service account JSON file location
+
+`statdoctor-seo-aeo-c9b8578bdabe.json` lives in repo root. **Gitignored** (matched by `statdoctor-seo-*.json` and `*service-account*.json` patterns in `.gitignore` — confirmed via `git check-ignore`). Don't delete — it's the only copy of the GSC SA private key. If lost, regenerate at <https://console.cloud.google.com/iam-admin/serviceaccounts?project=statdoctor-seo-aeo> (Keys tab → Add Key → JSON).
 
 ---
 
@@ -118,11 +234,14 @@ Click-by-click in `docs/superpowers/m3-domain-attach-runbook.md`. ~17 min user t
 
 | Task | Time | Status | Notes |
 |---|---|---|---|
-| **Vercel project transfer to Pro account** | ~3 min | 🟡 Pending | Anu mentioned wanting this before M3. Settings → General → Transfer Project. Domains/env vars/Postgres binding all follow automatically. After transfer: smoke test `curl https://statdoctor-blogposting.vercel.app/api/health`. |
-| **M3 setup** | ~17 min | 🟡 Pending | Full click-by-click in `docs/superpowers/m3-domain-attach-runbook.md`. Steps: GoDaddy CNAME → Vercel domain attach → GSC verify + service account → Bing import-from-GSC + API key → Vercel env vars (4 of them + `RESEND_API_KEY`) → Perplexity Publisher Program enrolment. |
-| **Calendar reminder: +5 days for SEO data** | ~10 sec | 🟡 Pending | GSC reporting lag is 2–3 days, Bing ~24h. `/admin/seo` dashboard shows "Warming up" until day 4–5. Set a reminder for ~Thursday 2026-05-21 to run the 4 verification curls. |
-| **Sunday review tomorrow (2026-05-17)** | 25 min | 🟡 Pending | **This IS the M5 pre-handover dry run.** Walk the queue in `/admin/posts`, approve/edit/reject. Capture: total time, approve-as-is rate, surprises. The Saturday batch (fired today at 14:00 UTC via GH Actions) will have populated the queue overnight. |
-| **Visual verify glassmorphism + article preview on production** | 2 min | 🟡 Pending | Open `https://statdoctor-blogposting.vercel.app/admin/posts` and `/admin/posts/<any-slug>`. Hard-refresh Cmd+Shift+R. Should show: purple shader bg on queue with translucent cards; white bg on article view with preview pane primary + editor folded. **NOT** the `statdoctor-blogposting-git-rollbac-803f3e-…` URL — that's a stale branch preview. |
+| ~~Vercel project transfer to Pro account~~ | — | ✅ ATTEMPTED 2026-05-17 — reverted | Cross-account transfer was blocked (`jasmineraj2005` not a member of `stat-doctor` Pro team). Attempted re-create as new project — failed due to GitHub App cross-account permissions barrier. Reverted to using `jasmine-rajs-projects/statdoctor-blogposting` (Hobby). See 2026-05-17 update section above. To re-attempt Pro: either invite `jasmineraj2005` to `stat-doctor` team first, OR upgrade `jasmine-rajs-projects` directly. |
+| ~~M3 setup~~ | — | ✅ DONE 2026-05-17 (mostly) | DNS + Vercel domain + GSC verify + Bing verify + Bing API + Vercel env vars all complete. Two follow-ups: (a) GSC service-account user-add still propagating in Google's directory — retry tomorrow morning (see below); (b) sitemap submission deferred (no sitemap yet). |
+| **Retry GSC service-account user-add** | ~30 sec | 🟡 PENDING (next-morning) | `statdoctor-seo-pull@statdoctor-seo-aeo.iam.gserviceaccount.com` added via <https://search.google.com/search-console/users?resource_id=sc-domain%3Astatdoctor.app> → Owner. Keeps returning "email not found" today — pure Google directory propagation lag (SA exists, API enabled, SA can call GSC API directly via gcloud — confirmed). Should work after 6–24h. Once added, `seo-snapshot` cron starts populating data automatically on next 02:00 UTC run. |
+| **Calendar reminder: Friday 2026-05-22** | ~10 sec | 🟡 Pending | Anu to set personal calendar reminder for +5d verification. On the day, run the 4 verification curls (`dig`, `curl` health, `curl /api/health`, `curl /api/cron/seo-snapshot` with `CRON_SECRET`) and open `/admin/seo` dashboard. Full procedure in `docs/superpowers/m3-domain-attach-runbook.md` §8. |
+| **Configure sitemap (Webflow or Next.js migration)** | ~5 min | 🟡 Pending | Step 3d of M3 deferred. `statdoctor.app/sitemap.xml` returns 404 (Webflow has no sitemap configured). `blog.statdoctor.app/sitemap.xml` doesn't exist by design (admin backend, not crawlable). Options: (a) enable sitemap in Webflow Designer/Settings, OR (b) wait for the Webflow→Next.js website migration and drop in `docs/website-artefacts/sitemap.ts`. Not blocking GSC — Google will crawl naturally. |
+| **Apply to Perplexity Publishers Program** | ~5 min | 🟡 Deferred (~Aug 2026) | Eligibility requires 50+ indexed articles + domain authority threshold. Current cadence 4 articles/week → reaches threshold around August 2026. Email draft prepared (see chat transcript) — send to `publishers@perplexity.ai` with current article count when threshold met. AHPRA editorial review angle is the differentiator. |
+| **Sunday review every Sunday** | 25 min | 🟡 Recurring | Walk the queue at `https://blog.statdoctor.app/admin/posts`, approve/edit/reject. Login creds: `anu@statdoctor.au` / `statdoctor@1` (**`.au`, not `.net`** — defaults from `extracted/app/api/login/route.ts:35–36`; override via `ADMIN_USERNAME` / `ADMIN_PASSWORD` Vercel env vars if desired). Target ≥95% approve-as-is in ≤25 min. The Saturday batch fires automatically via `pipeline.yml` cron (Mon/Wed/Fri/Sat 14:00 UTC). |
+| **Visual verify glassmorphism + article preview** | 2 min | 🟡 Pending | Open `https://blog.statdoctor.app/admin/posts` and `/admin/posts/<any-slug>`. Hard-refresh Cmd+Shift+R. Should show: purple shader bg on queue with translucent cards; white bg on article view with preview pane primary + editor folded. (URL changed since previous handover — now uses the live `blog.statdoctor.app` domain attached today.) |
 
 ---
 

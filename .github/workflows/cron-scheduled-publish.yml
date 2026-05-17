@@ -17,8 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Hit /api/cron/scheduled-publish
-        run: |
-          curl --fail-with-body \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            ${{ secrets.CRON_BASE_URL }}/api/cron/scheduled-publish
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/recover-and-alert
+        with:
+          name: scheduled-publish
+          url: ${{ secrets.CRON_BASE_URL }}/api/cron/scheduled-publish
+          token: ${{ secrets.CRON_SECRET }}
+          alert_url: ${{ secrets.CRON_BASE_URL }}/api/alerts/dispatch
+          alert_token: ${{ secrets.ALERT_INGEST_TOKEN }}

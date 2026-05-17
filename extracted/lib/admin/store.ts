@@ -83,12 +83,16 @@ function rowToFile(row: Row): PostFile {
 // Reads
 // ──────────────────────────────────────────────────────────────────────────────
 
+/** Canary rows (Fail-Agent Layer D) are filtered from the queue views. */
+const CANARY_PREFIX = "__canary-";
+
 export async function getAllPosts(): Promise<PostFile[]> {
   if (isDbConfigured()) {
     const { rows } = await sql<Row>`
       SELECT slug, filename, status, pillar, content_type, word_count, ahpra_passed,
              generated_at, date_modified, last_reviewed_at, data
         FROM posts
+        WHERE slug NOT LIKE ${CANARY_PREFIX + "%"}
         ORDER BY generated_at DESC
     `;
     return rows.map(rowToFile);
@@ -103,11 +107,21 @@ export async function getPendingPosts(): Promise<PostFile[]> {
              generated_at, date_modified, last_reviewed_at, data
         FROM posts
         WHERE status = 'pending_review'
+          AND slug NOT LIKE ${CANARY_PREFIX + "%"}
         ORDER BY generated_at DESC
     `;
     return rows.map(rowToFile);
   }
   return fsGetPending();
+}
+
+/** Hard-delete a post row. Used by Fail-Agent Layer D canary cleanup. */
+export async function deletePostBySlug(slug: string): Promise<boolean> {
+  if (!isDbConfigured()) {
+    throw new Error("deletePostBySlug requires DB; cannot run in fs-only mode");
+  }
+  const { rowCount } = await sql`DELETE FROM posts WHERE slug = ${slug}`;
+  return rowCount > 0;
 }
 
 export async function getPostBySlug(slug: string): Promise<PostFile | null> {

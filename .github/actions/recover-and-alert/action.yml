@@ -1,0 +1,45 @@
+name: "Recover and alert"
+description: "Curl with single retry; on second failure POST to /api/alerts/dispatch"
+
+inputs:
+  name:
+    description: "cron kind (e.g. seo-snapshot)"
+    required: true
+  url:
+    description: "endpoint URL to hit"
+    required: true
+  token:
+    description: "bearer token (CRON_SECRET) for the endpoint"
+    required: true
+  alert_url:
+    description: "/api/alerts/dispatch URL"
+    required: true
+  alert_token:
+    description: "ALERT_INGEST_TOKEN for the dispatch endpoint"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Curl + retry + alert
+      shell: bash
+      run: |
+        set +e
+        attempt() {
+          curl --fail-with-body --max-time 60 \
+               -H "Authorization: Bearer ${{ inputs.token }}" \
+               "${{ inputs.url }}"
+        }
+
+        attempt && exit 0
+        echo "::warning::First attempt of ${{ inputs.name }} failed; sleeping 60s and retrying"
+        sleep 60
+        if attempt; then exit 0; fi
+
+        echo "::error::Second attempt of ${{ inputs.name }} failed; dispatching alert"
+        curl --fail-with-body --max-time 30 -X POST \
+             -H "Content-Type: application/json" \
+             -H "Authorization: Bearer ${{ inputs.alert_token }}" \
+             -d "{\"kind\":\"${{ inputs.name }}_failed\",\"severity\":\"error\",\"detail\":\"cron ${{ inputs.name }} failed twice (60s apart)\"}" \
+             "${{ inputs.alert_url }}" || echo "::error::Alert dispatch also failed"
+        exit 1

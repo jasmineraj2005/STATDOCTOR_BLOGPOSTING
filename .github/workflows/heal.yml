@@ -1,0 +1,64 @@
+name: Heal — re-run writer on a red article
+
+# Fired by the dashboard /api/posts/<slug>/heal endpoint when the CEO clicks
+# "Heal" on a queued article whose validators are red. Re-runs writer with
+# the specific failure reasons so the article comes back patched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "Slug of the article to heal (e.g. locum-doctor-work-in-nsw...)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heal-${{ inputs.slug }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run heal-agent
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CRON_BASE_URL: ${{ secrets.CRON_BASE_URL }}
+          INGEST_URL: ${{ secrets.INGEST_URL }}
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+        run: python heal_agent.py "${{ inputs.slug }}"
+
+      - name: Dispatch alert on heal failure
+        if: failure()
+        working-directory: .
+        env:
+          ALERT_URL: ${{ secrets.CRON_BASE_URL }}/api/alerts/dispatch
+          ALERT_TOKEN: ${{ secrets.ALERT_INGEST_TOKEN }}
+          SLUG: ${{ inputs.slug }}
+        run: |
+          curl --fail-with-body --max-time 30 -X POST \
+               -H "Content-Type: application/json" \
+               -H "Authorization: Bearer $ALERT_TOKEN" \
+               -d "{\"kind\":\"heal_failed\",\"severity\":\"error\",\"detail\":\"heal_agent failed for slug=$SLUG (see GH Actions log)\"}" \
+               "$ALERT_URL" || echo "::error::Alert dispatch failed"

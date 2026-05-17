@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS posts (
   slug TEXT PRIMARY KEY,
   filename TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending_review'
-    CHECK (status IN ('pending_review','approved','scheduled','rejected','published','publish_failed')),
+    CHECK (status IN ('pending_review','pending_heal','heal_failed','approved','scheduled','rejected','published','publish_failed')),
   pillar TEXT NOT NULL,
   content_type TEXT NOT NULL
     CHECK (content_type IN ('news','guide','company')),
@@ -114,7 +114,25 @@ CREATE INDEX IF NOT EXISTS aeo_ts_idx ON aeo_log (ts DESC);
 CREATE INDEX IF NOT EXISTS aeo_keyword_idx ON aeo_log (keyword, ts DESC);
 
 -- ── M7: publish_failed status migration ───────────────────────────────────────
--- Idempotent: drops the old CHECK constraint (if it exists without publish_failed)
--- and re-adds it with publish_failed included. Safe to run on an existing DB.
+-- Idempotent: drops the old CHECK constraint and re-adds it with publish_failed
+-- + heal-agent statuses included. Safe to run on an existing DB.
 ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_status_check;
-ALTER TABLE posts ADD CONSTRAINT posts_status_check CHECK (status IN ('pending_review','approved','scheduled','rejected','published','publish_failed'));
+ALTER TABLE posts ADD CONSTRAINT posts_status_check CHECK (status IN ('pending_review','pending_heal','heal_failed','approved','scheduled','rejected','published','publish_failed'));
+
+-- ── Fail-Agent Layer A: pipeline_runs (2026-05-17 PM) ─────────────────────────
+-- Every agent run (intelligence, researcher, writer, seo, ahpra) appends a row
+-- with status ∈ {ok, fail, retried, aborted}. Operator queries by run_id to
+-- debug failed pipeline runs.
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+  id BIGSERIAL PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  agent_name TEXT NOT NULL
+    CHECK (agent_name IN ('intelligence','researcher','writer','seo','ahpra')),
+  status TEXT NOT NULL
+    CHECK (status IN ('ok','fail','retried','aborted')),
+  failure_reason TEXT,
+  retry_count INT NOT NULL DEFAULT 0,
+  ts TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pipeline_runs_run_idx ON pipeline_runs (run_id, ts);
+CREATE INDEX IF NOT EXISTS pipeline_runs_agent_idx ON pipeline_runs (agent_name, ts DESC);

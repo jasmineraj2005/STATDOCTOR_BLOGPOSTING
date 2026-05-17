@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import ShaderBackground from "@/components/shader-background";
+import { Banner } from "@/components/admin/banner";
 import { isAuthorised } from "@/lib/admin/auth";
 import { getAllPosts, getPendingPosts } from "@/lib/admin/store";
+import { computeBannerState, type BannerState } from "@/lib/admin/banner";
+import { isDbConfigured, pool } from "@/lib/admin/db";
 import { runValidators, isApprovable } from "@/lib/admin/validators";
 import {
   CONTENT_TYPE_LABELS,
@@ -42,18 +45,32 @@ const TYPE_CHIP: React.CSSProperties = {
 export default async function PostsQueue() {
   if (!(await isAuthorised())) redirect("/login");
 
-  const [pending, all] = await Promise.all([
+  const [pending, all, bannerState] = await Promise.all([
     getPendingPosts(),
     getAllPosts(),
+    isDbConfigured()
+      ? computeBannerState(
+          {
+            query: async (text, values) => {
+              const r = await pool().query(text, values as unknown[]);
+              return { rows: r.rows };
+            },
+          },
+          new Date(),
+        )
+      : Promise.resolve({ kind: "none" } as BannerState),
   ]);
   const scheduled = all.filter((f) => f.post.status === "scheduled");
   const published = all.filter((f) => f.post.status === "published");
   const rejected = all.filter((f) => f.post.status === "rejected");
+  const healing = all.filter((f) => f.post.status === "pending_heal");
+  const healFailed = all.filter((f) => f.post.status === "heal_failed");
 
   return (
     <ShaderBackground>
       <main className="relative z-10 min-h-screen pt-14 pb-32 px-6">
         <div className="max-w-[1100px] mx-auto">
+          <Banner state={bannerState} />
           <div className="text-[10px] font-medium tracking-widest uppercase text-violet-300 mb-3">
             Editorial admin
           </div>
@@ -65,6 +82,18 @@ export default async function PostsQueue() {
             <span>{scheduled.length}</span> scheduled ·{" "}
             <span>{published.length}</span> published ·{" "}
             <span>{rejected.length}</span> rejected
+            {healing.length > 0 && (
+              <>
+                {" · "}
+                <span className="text-amber-300">{healing.length} healing</span>
+              </>
+            )}
+            {healFailed.length > 0 && (
+              <>
+                {" · "}
+                <span className="text-red-300">{healFailed.length} heal-failed</span>
+              </>
+            )}
           </p>
 
           {pending.length === 0 ? (
@@ -90,6 +119,32 @@ export default async function PostsQueue() {
                 <QueueRow key={file.filename} file={file} />
               ))}
             </ul>
+          )}
+
+          {healing.length > 0 && (
+            <FoldSection title={`Healing (${healing.length}) — heal workflow running, will refresh as pending_review`}>
+              {healing.map((f) => (
+                <RowLite
+                  key={f.filename}
+                  title={f.post.title}
+                  slug={f.post.slug}
+                  meta={`fired ${new Date(f.post.generated_at).toLocaleString("en-AU")}`}
+                />
+              ))}
+            </FoldSection>
+          )}
+
+          {healFailed.length > 0 && (
+            <FoldSection title={`Heal failed (${healFailed.length}) — manual edit required`}>
+              {healFailed.map((f) => (
+                <RowLite
+                  key={f.filename}
+                  title={f.post.title}
+                  slug={f.post.slug}
+                  meta="needs manual edit — validators couldn't auto-fix"
+                />
+              ))}
+            </FoldSection>
           )}
 
           {scheduled.length > 0 && (

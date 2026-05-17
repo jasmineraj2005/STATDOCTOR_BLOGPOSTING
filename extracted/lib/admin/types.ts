@@ -5,6 +5,8 @@
 
 export type PostStatus =
   | "pending_review"
+  | "pending_heal"   // ingest detected red validators; heal workflow running
+  | "heal_failed"    // 2+ heal attempts and still red — needs manual edit
   | "approved"
   | "scheduled"
   | "rejected"

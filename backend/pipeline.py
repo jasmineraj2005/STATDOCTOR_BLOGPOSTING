@@ -21,6 +21,14 @@ from agents.researcher import research_topic
 from agents.writer import write_post
 from agents.seo import generate_seo
 from agents.ahpra import check_ahpra
+from agents.fail_agent import (
+    log_run,
+    new_run_id,
+    validate_ahpra,
+    validate_researcher,
+    validate_seo,
+    validate_writer,
+)
 
 
 def _derive_content_type(pillar: ContentPillar) -> ContentType:
@@ -39,12 +47,16 @@ def _derive_content_type(pillar: ContentPillar) -> ContentType:
 def run_pipeline() -> FinalPost:
     """Run the full pipeline end-to-end. Returns the assembled FinalPost."""
     _header()
+    run_id = new_run_id()
+    print(f"  run_id={run_id}\n")
 
     # Agent 1: Intelligence — pick the topic
     topic = select_topic()
+    log_run(run_id, "intelligence", "ok")
 
     # Agent 3: Researcher — gather facts, sources, image
     research = research_topic(topic)
+    _check(run_id, "researcher", validate_researcher(research))
 
     # Agent 4: Writer — write the post
     post = write_post(research)
@@ -52,11 +64,21 @@ def run_pipeline() -> FinalPost:
     # Decide content_type from pillar before SEO so title cadence varies correctly.
     content_type = _derive_content_type(topic.pillar)
 
+    # Fail-Agent Layer A — validate writer output (uses content_type from pillar)
+    writer_payload = {
+        "content_type": content_type.value if hasattr(content_type, "value") else str(content_type),
+        "word_count": len(post.content_markdown.split()),
+        "content_markdown": post.content_markdown,
+    }
+    _check(run_id, "writer", validate_writer(writer_payload))
+
     # Agent 5: SEO — metadata + JSON-LD schemas (cadence depends on content_type).
     seo = generate_seo(post, topic, content_type=content_type, image_url=research.image_url)
+    _check(run_id, "seo", validate_seo(seo))
 
     # Agent 6: AHPRA — compliance check, auto-fix, flag issues
     cleaned_content, ahpra_flags, ahpra_passed = check_ahpra(post.content_markdown)
+    _check(run_id, "ahpra", validate_ahpra(cleaned_content))
 
     now = datetime.utcnow()
 
@@ -182,6 +204,16 @@ def _push_to_dashboard(post: FinalPost) -> None:
         print(f"  ⚠  Dashboard push failed: HTTP {e.code} {e.reason}")
     except Exception as e:
         print(f"  ⚠  Dashboard push errored: {e}")
+
+
+def _check(run_id: str, agent_name: str, result) -> None:
+    """Log a fail_agent validation Result and warn (no abort yet — Layer A is
+    observability-first; full retry orchestration is a follow-up)."""
+    if result.ok:
+        log_run(run_id, agent_name, "ok")
+        return
+    log_run(run_id, agent_name, "fail", result.reason)
+    print(f"  ⚠  fail-agent: {agent_name} — {result.reason}")
 
 
 def _header() -> None:

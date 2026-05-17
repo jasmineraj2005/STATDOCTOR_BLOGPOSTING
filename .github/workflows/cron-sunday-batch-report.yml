@@ -1,0 +1,29 @@
+name: Cron — sunday-batch-report
+
+# Monday 09:00 UTC ≈ Sunday 19:00 AEST. Sends the Resend email summarising
+# the prior Sunday review window. Persists to sunday_batch_reports (idempotent).
+#
+# Moved off Vercel (no vercel.json) — Hobby plan caps at 2 crons, and all
+# scheduled work lives in GitHub Actions instead.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/recover-and-alert
+        with:
+          name: sunday-batch-report
+          url: ${{ secrets.CRON_BASE_URL }}/api/cron/sunday-batch-report
+          token: ${{ secrets.CRON_SECRET }}
+          alert_url: ${{ secrets.CRON_BASE_URL }}/api/alerts/dispatch
+          alert_token: ${{ secrets.ALERT_INGEST_TOKEN }}

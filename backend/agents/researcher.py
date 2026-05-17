@@ -211,6 +211,62 @@ def _scrape_og_image(url: str) -> tuple[str | None, str | None, str | None]:
     return image_url, author, alt_text
 
 
+def _fetch_wikimedia_image(query: str) -> tuple[str | None, str | None, str | None]:
+    """Wikimedia Commons search as a fallback when OG-scrape returns nothing.
+
+    Returns (image_url, credit_author, alt_text). Real attributable images,
+    free to reuse with credit. We filter to CC/PD-licensed files only so the
+    attribution we emit is honest.
+    """
+    if not query:
+        return None, None, None
+    params = {
+        "action": "query",
+        "format": "json",
+        "prop": "imageinfo",
+        "generator": "search",
+        "gsrnamespace": "6",  # File namespace
+        "gsrlimit": "5",
+        "gsrsearch": query,
+        "iiprop": "url|extmetadata|mime",
+    }
+    try:
+        r = httpx.get(
+            "https://commons.wikimedia.org/w/api.php",
+            params=params,
+            headers={"User-Agent": "StatDoctorBot/1.0 (+https://statdoctor.app)"},
+            timeout=8,
+        )
+        r.raise_for_status()
+        pages = (r.json().get("query") or {}).get("pages") or {}
+    except Exception as e:
+        print(f"  [Researcher] Wikimedia error: {e}")
+        return None, None, None
+
+    permissive_licenses = ("cc-by", "cc0", "public domain", "pd-", "cc by")
+    for page in pages.values():
+        info_list = page.get("imageinfo") or []
+        if not info_list:
+            continue
+        info = info_list[0]
+        mime = (info.get("mime") or "").lower()
+        if mime not in ("image/jpeg", "image/png", "image/webp"):
+            continue
+        meta = info.get("extmetadata") or {}
+        license_short = (meta.get("LicenseShortName") or {}).get("value", "").lower()
+        if not any(lic in license_short for lic in permissive_licenses):
+            continue
+        image_url = info.get("url")
+        if not image_url or _is_blocked_image_url(image_url):
+            continue
+        artist_raw = (meta.get("Artist") or {}).get("value", "")
+        artist = re.sub(r"<[^>]+>", "", artist_raw).strip() or "Wikimedia Commons"
+        description_raw = (meta.get("ImageDescription") or {}).get("value", "")
+        alt = re.sub(r"<[^>]+>", "", description_raw).strip()[:200] or query
+        return image_url, artist, alt
+    return None, None, None
+
+
 def _search_guardian(query: str, n: int = 8) -> list[dict]:
     if not GUARDIAN_API_KEY:
         return []
@@ -493,6 +549,16 @@ Rules:
             og_alt: str | None = None
             if src_url:
                 og_image_url, og_author, og_alt = _scrape_og_image(src_url)
+            # Wikimedia Commons fallback when the publisher page has no og:image.
+            # Uses the source title as the search query — topical match.
+            image_credit_publisher = src_publisher if og_image_url else None
+            if not og_image_url:
+                wm_url, wm_artist, wm_alt = _fetch_wikimedia_image(s.get("title", ""))
+                if wm_url:
+                    og_image_url = wm_url
+                    og_author = wm_artist
+                    og_alt = wm_alt
+                    image_credit_publisher = "Wikimedia Commons"
             all_sources.append(
                 Source(
                     title=s.get("title", ""),
@@ -500,7 +566,7 @@ Rules:
                     publisher=src_publisher,
                     snippet=s.get("snippet", ""),
                     image_url=og_image_url,
-                    image_credit_publisher=src_publisher if og_image_url else None,
+                    image_credit_publisher=image_credit_publisher,
                     image_credit_author=og_author if og_image_url else None,
                     image_alt=(og_alt or s.get("title", "")) if og_image_url else None,
                 )

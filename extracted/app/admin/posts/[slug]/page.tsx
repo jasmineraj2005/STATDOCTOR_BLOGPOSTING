@@ -59,6 +59,17 @@ export default async function PostEditPage({
             <p className="mt-2 text-gray-500 text-sm max-w-2xl">{post.tldr}</p>
           </div>
           <div className="flex gap-2">
+            {!approvable && (
+              <form action={`/api/posts/${post.slug}/heal`} method="POST">
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-full bg-amber-500 text-white text-[10px] font-semibold tracking-widest hover:bg-amber-600 transition-colors"
+                  title="Re-run the writer with the failing validators as feedback. Refresh in ~90s."
+                >
+                  HEAL
+                </button>
+              </form>
+            )}
             <form action={`/api/posts/${post.slug}/approve`} method="POST">
               <button
                 type="submit"
@@ -67,7 +78,7 @@ export default async function PostEditPage({
                 title={
                   approvable
                     ? "Approve and publish to website"
-                    : "Validators must all pass before approval"
+                    : "Validators must all pass before approval — try the HEAL button to fix automatically"
                 }
               >
                 APPROVE &amp; PUBLISH
