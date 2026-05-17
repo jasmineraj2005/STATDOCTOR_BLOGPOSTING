@@ -17,8 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Hit /api/cron/seo-snapshot
-        run: |
-          curl --fail-with-body \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            ${{ secrets.CRON_BASE_URL }}/api/cron/seo-snapshot
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/recover-and-alert
+        with:
+          name: seo-snapshot
+          url: ${{ secrets.CRON_BASE_URL }}/api/cron/seo-snapshot
+          token: ${{ secrets.CRON_SECRET }}
+          alert_url: ${{ secrets.CRON_BASE_URL }}/api/alerts/dispatch
+          alert_token: ${{ secrets.ALERT_INGEST_TOKEN }}

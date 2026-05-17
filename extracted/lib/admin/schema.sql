@@ -118,3 +118,21 @@ CREATE INDEX IF NOT EXISTS aeo_keyword_idx ON aeo_log (keyword, ts DESC);
 -- and re-adds it with publish_failed included. Safe to run on an existing DB.
 ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_status_check;
 ALTER TABLE posts ADD CONSTRAINT posts_status_check CHECK (status IN ('pending_review','approved','scheduled','rejected','published','publish_failed'));
+
+-- ── Fail-Agent Layer A: pipeline_runs (2026-05-17 PM) ─────────────────────────
+-- Every agent run (intelligence, researcher, writer, seo, ahpra) appends a row
+-- with status ∈ {ok, fail, retried, aborted}. Operator queries by run_id to
+-- debug failed pipeline runs.
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+  id BIGSERIAL PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  agent_name TEXT NOT NULL
+    CHECK (agent_name IN ('intelligence','researcher','writer','seo','ahpra')),
+  status TEXT NOT NULL
+    CHECK (status IN ('ok','fail','retried','aborted')),
+  failure_reason TEXT,
+  retry_count INT NOT NULL DEFAULT 0,
+  ts TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS pipeline_runs_run_idx ON pipeline_runs (run_id, ts);
+CREATE INDEX IF NOT EXISTS pipeline_runs_agent_idx ON pipeline_runs (agent_name, ts DESC);

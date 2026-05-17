@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import ShaderBackground from "@/components/shader-background";
+import { Banner } from "@/components/admin/banner";
 import { isAuthorised } from "@/lib/admin/auth";
 import { getAllPosts, getPendingPosts } from "@/lib/admin/store";
+import { computeBannerState, type BannerState } from "@/lib/admin/banner";
+import { isDbConfigured, pool } from "@/lib/admin/db";
 import { runValidators, isApprovable } from "@/lib/admin/validators";
 import {
   CONTENT_TYPE_LABELS,
@@ -42,9 +45,20 @@ const TYPE_CHIP: React.CSSProperties = {
 export default async function PostsQueue() {
   if (!(await isAuthorised())) redirect("/login");
 
-  const [pending, all] = await Promise.all([
+  const [pending, all, bannerState] = await Promise.all([
     getPendingPosts(),
     getAllPosts(),
+    isDbConfigured()
+      ? computeBannerState(
+          {
+            query: async (text, values) => {
+              const r = await pool().query(text, values as unknown[]);
+              return { rows: r.rows };
+            },
+          },
+          new Date(),
+        )
+      : Promise.resolve({ kind: "none" } as BannerState),
   ]);
   const scheduled = all.filter((f) => f.post.status === "scheduled");
   const published = all.filter((f) => f.post.status === "published");
@@ -54,6 +68,7 @@ export default async function PostsQueue() {
     <ShaderBackground>
       <main className="relative z-10 min-h-screen pt-14 pb-32 px-6">
         <div className="max-w-[1100px] mx-auto">
+          <Banner state={bannerState} />
           <div className="text-[10px] font-medium tracking-widest uppercase text-violet-300 mb-3">
             Editorial admin
           </div>

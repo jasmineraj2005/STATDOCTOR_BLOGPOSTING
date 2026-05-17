@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { upsertPost } from "@/lib/admin/store";
 import { validateSourcesQuick } from "@/lib/admin/url-validator";
+import { runIngestGate, gateMode } from "./gate";
 import type { Post, PostFile, AHPRAFlag } from "@/lib/admin/types";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +90,24 @@ export async function POST(req: Request) {
 
       responseFlags.push(...flags);
     }
+  }
+
+  // ── Layer C — server-side hard-gate (Fail-Agent) ──────────────────────────
+  // Checks word_count vs validators.json floors, source_count >= 5, required
+  // schema fields. Strict mode returns 422 + validation_errors[]. Shadow mode
+  // (default) logs and continues — flip FAIL_AGENT_INGEST_GATE=strict on
+  // Vercel after smoke-testing real pipeline output.
+  const layerCErrors = runIngestGate(filteredPost as Parameters<typeof runIngestGate>[0]);
+  if (layerCErrors.length > 0) {
+    if (gateMode() === "strict") {
+      return NextResponse.json(
+        { error: "validation_failed", validation_errors: layerCErrors },
+        { status: 422 },
+      );
+    }
+    console.warn(
+      `[fail-agent/layer-c] slug=${filteredPost.slug} mode=shadow violations=${JSON.stringify(layerCErrors)}`,
+    );
   }
 
   const file: PostFile = {

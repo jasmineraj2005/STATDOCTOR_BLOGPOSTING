@@ -55,5 +55,19 @@ jobs:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           INGEST_URL: ${{ secrets.INGEST_URL }}
           INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+          CRON_BASE_URL: ${{ secrets.CRON_BASE_URL }}
           MODE: ${{ inputs.mode }}
         run: python main.py
+
+      - name: Dispatch alert on pipeline failure
+        if: failure()
+        working-directory: .
+        env:
+          ALERT_URL: ${{ secrets.CRON_BASE_URL }}/api/alerts/dispatch
+          ALERT_TOKEN: ${{ secrets.ALERT_INGEST_TOKEN }}
+        run: |
+          curl --fail-with-body --max-time 30 -X POST \
+               -H "Content-Type: application/json" \
+               -H "Authorization: Bearer $ALERT_TOKEN" \
+               -d '{"kind":"pipeline_failed","severity":"critical","detail":"python main.py exited non-zero (see GH Actions log)"}' \
+               "$ALERT_URL" || echo "::error::Alert dispatch failed"

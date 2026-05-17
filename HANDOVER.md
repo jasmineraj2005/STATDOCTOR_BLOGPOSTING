@@ -401,6 +401,46 @@ If you rotate `ADMIN_TOKEN` / `CRON_SECRET` / `INGEST_TOKEN`, update the secret 
 
 ---
 
+## Fail-Agent System (added 2026-05-17 PM)
+
+Four-layer defence so the system survives months unattended. Each layer is
+independent — a failure in one doesn't disable the others.
+
+- **Layer A — Python validators** (`backend/agents/fail_agent.py`): after each
+  main agent (researcher / writer / SEO / AHPRA) runs, the matching
+  `validate_*` function checks the output against `validators.json` + minimum
+  source counts. Every check is logged to the `pipeline_runs` DB table
+  (`run_id`, `agent_name`, `status`, `failure_reason`, `retry_count`). The
+  current iteration ships as observability-first; full auto-retry with
+  re-prompting is the next iteration once each agent accepts a
+  `previous_failure` kwarg.
+- **Layer B — Workflow recovery** (`.github/actions/recover-and-alert/`):
+  composite action wraps every cron's curl. On non-2xx: sleeps 60s, retries
+  once, and on second failure POSTs to `/api/alerts/dispatch` (severity=error).
+  All six workflows now use it.
+- **Layer C — Ingest gate** (`extracted/app/api/admin/ingest/gate.ts`):
+  server-side hard-gate on the `/api/admin/ingest` payload. Checks: required
+  schema fields, word_count vs floor from `validators.json`, sources ≥ 5.
+  Defaults to **shadow mode** (logs `[fail-agent/layer-c] mode=shadow …`).
+  Flip `FAIL_AGENT_INGEST_GATE=strict` on Vercel to switch to 422 enforcement
+  after smoke-testing.
+- **Layer D — Daily canary** (`extracted/app/api/cron/canary/route.ts` +
+  `.github/workflows/cron-canary.yml`): 04:00 UTC daily. Builds a synthetic
+  article (`buildCanaryPost`), walks ingest → approve → publish-dry → delete.
+  Slug prefix `__canary-` is filtered from public queue views. Any step
+  failure dispatches a `canary_failed` critical alert with full step context.
+
+To debug a failed pipeline run: `SELECT * FROM pipeline_runs WHERE run_id='<uuid>' ORDER BY ts;`
+
+### New Vercel env vars (Fail-Agent)
+- `ALERT_INGEST_TOKEN` — random 32+ chars, also set as GH Actions secret. Auths Layer B's POST to `/api/alerts/dispatch`.
+- `FAIL_AGENT_INGEST_GATE` — set to `strict` to enable Layer C 422s. Default unset = shadow mode.
+- `CANARY_DRY_RUN` — optional, defaults to dry-run; canary never writes to the website repo regardless.
+
+### Stats + Features pages (2026-05-17 PM)
+- `/admin/stats` — CEO-facing growth dashboard (weekly published, GSC top-10, GSC/Bing trends, AEO citations).
+- `/admin/features` — "How this is built" marketing-style showcase with live counters. Show to investors/partners.
+
 ## Resume from a cold pickup
 
 If a fresh person opens this repo a month from now:
