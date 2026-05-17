@@ -153,10 +153,37 @@ export async function POST(req: Request) {
   try {
     await upsertPost(file, postToSave);
   } catch (e) {
-    return NextResponse.json(
-      { error: "upsert_failed", detail: String(e) },
-      { status: 500 },
-    );
+    // The 'pending_heal' / 'heal_failed' statuses are only valid after the
+    // schema migration runs. If the prod DB hasn't been migrated yet, the
+    // CHECK constraint rejects the row. Detect that case and fall back to
+    // 'pending_review' so the article still lands — operator can run the
+    // migration later and the next ingest will use the new statuses cleanly.
+    const message = String(e);
+    const isCheckConstraint =
+      message.includes("posts_status_check") ||
+      message.includes("violates check constraint");
+    if (isCheckConstraint && healStatus !== "ok") {
+      console.warn(
+        `[ingest] CHECK constraint blocked status='${postToSave.status}' — falling back to pending_review. Run POST /api/admin/migrate to enable new statuses. slug=${postToSave.slug}`,
+      );
+      const fallback: Post = { ...filteredPost, status: "pending_review" };
+      const fallbackFile: PostFile = { ...file, post: fallback };
+      try {
+        await upsertPost(fallbackFile, fallback);
+        postToSave = fallback;
+        healStatus = "ok"; // suppress heal dispatch (no auto-heal until migrated)
+      } catch (e2) {
+        return NextResponse.json(
+          { error: "upsert_failed", detail: String(e2), fallback_attempted: true },
+          { status: 500 },
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { error: "upsert_failed", detail: String(e) },
+        { status: 500 },
+      );
+    }
   }
 
   // Fire heal workflow_dispatch (don't fail the ingest if dispatch errors —
