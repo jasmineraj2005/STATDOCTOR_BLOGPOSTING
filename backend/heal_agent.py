@@ -61,6 +61,11 @@ def _http_post_json(url: str, payload: dict[str, Any], headers: dict[str, str]) 
         return e.code, e.read().decode("utf-8")
 
 
+def _current_heal_attempt(post: dict[str, Any]) -> int:
+    """The dashboard returns the current heal_attempt counter via heal-data."""
+    return int(post.get("heal_attempt") or 0)
+
+
 def fetch_post(slug: str) -> dict[str, Any]:
     if not CRON_BASE_URL:
         raise SystemExit("CRON_BASE_URL not set; can't fetch post")
@@ -129,8 +134,17 @@ def heal(slug: str) -> dict[str, Any]:
     ts = post.get("generated_at", "").replace("-", "").replace(":", "").replace("T", "_")[:15]
     filename = f"{ts or 'heal'}_{slug[:50]}.json"
     body = {"filename": filename, "post": patched}
+
+    # X-Heal-Attempt increments each round-trip so /api/admin/ingest can stop
+    # the heal loop after MAX_HEAL_ATTEMPTS and land the post as heal_failed.
+    prior_attempts = _current_heal_attempt(payload)
     status, response = _http_post_json(
-        INGEST_URL, body, {"Authorization": f"Bearer {INGEST_TOKEN}"}
+        INGEST_URL,
+        body,
+        {
+            "Authorization": f"Bearer {INGEST_TOKEN}",
+            "X-Heal-Attempt": str(prior_attempts + 1),
+        },
     )
     print(f"[heal] ingest response: {status} {response[:200]}")
     return {"ok": 200 <= status < 300, "status": status, "instruction": instruction}

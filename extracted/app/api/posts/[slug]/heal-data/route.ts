@@ -43,11 +43,21 @@ export async function GET(
   const wordFloors = (cfg as { word_floors: Record<string, number> }).word_floors;
   const word_floor = wordFloors[file.post.content_type] ?? 1500;
 
+  // heal_attempt is tracked as the count of prior 'pending_heal' rows for
+  // this slug in pipeline_runs. Simpler: read from post.heal_attempt if set
+  // (we keep this as a top-level field on the Post JSON so heal_agent can
+  // pass it back via X-Heal-Attempt). Falls back to 0 for first heal.
+  const heal_attempt =
+    typeof (file.post as unknown as { heal_attempt?: number }).heal_attempt === "number"
+      ? (file.post as unknown as { heal_attempt: number }).heal_attempt
+      : 0;
+
   return NextResponse.json({
     slug,
     post: file.post,
     filename: file.filename,
     validation_failures,
     word_floor,
+    heal_attempt,
   });
 }

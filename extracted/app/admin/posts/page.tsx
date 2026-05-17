@@ -63,6 +63,8 @@ export default async function PostsQueue() {
   const scheduled = all.filter((f) => f.post.status === "scheduled");
   const published = all.filter((f) => f.post.status === "published");
   const rejected = all.filter((f) => f.post.status === "rejected");
+  const healing = all.filter((f) => f.post.status === "pending_heal");
+  const healFailed = all.filter((f) => f.post.status === "heal_failed");
 
   return (
     <ShaderBackground>
@@ -80,6 +82,18 @@ export default async function PostsQueue() {
             <span>{scheduled.length}</span> scheduled ·{" "}
             <span>{published.length}</span> published ·{" "}
             <span>{rejected.length}</span> rejected
+            {healing.length > 0 && (
+              <>
+                {" · "}
+                <span className="text-amber-300">{healing.length} healing</span>
+              </>
+            )}
+            {healFailed.length > 0 && (
+              <>
+                {" · "}
+                <span className="text-red-300">{healFailed.length} heal-failed</span>
+              </>
+            )}
           </p>
 
           {pending.length === 0 ? (
@@ -105,6 +119,32 @@ export default async function PostsQueue() {
                 <QueueRow key={file.filename} file={file} />
               ))}
             </ul>
+          )}
+
+          {healing.length > 0 && (
+            <FoldSection title={`Healing (${healing.length}) — heal workflow running, will refresh as pending_review`}>
+              {healing.map((f) => (
+                <RowLite
+                  key={f.filename}
+                  title={f.post.title}
+                  slug={f.post.slug}
+                  meta={`fired ${new Date(f.post.generated_at).toLocaleString("en-AU")}`}
+                />
+              ))}
+            </FoldSection>
+          )}
+
+          {healFailed.length > 0 && (
+            <FoldSection title={`Heal failed (${healFailed.length}) — manual edit required`}>
+              {healFailed.map((f) => (
+                <RowLite
+                  key={f.filename}
+                  title={f.post.title}
+                  slug={f.post.slug}
+                  meta="needs manual edit — validators couldn't auto-fix"
+                />
+              ))}
+            </FoldSection>
           )}
 
           {scheduled.length > 0 && (

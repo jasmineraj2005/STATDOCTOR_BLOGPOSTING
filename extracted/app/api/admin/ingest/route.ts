@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { upsertPost } from "@/lib/admin/store";
 import { validateSourcesQuick } from "@/lib/admin/url-validator";
+import { runValidators } from "@/lib/admin/validators";
+import { dispatchHealWorkflow, hasFixableFailures } from "@/lib/admin/heal-dispatch";
 import { runIngestGate, gateMode } from "./gate";
-import type { Post, PostFile, AHPRAFlag } from "@/lib/admin/types";
+import type { Post, PostFile, AHPRAFlag, PostStatus } from "@/lib/admin/types";
+
+/** Heal-loop guardrail — max times the heal agent can re-POST a single slug. */
+const MAX_HEAL_ATTEMPTS = 2;
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -110,15 +115,43 @@ export async function POST(req: Request) {
     );
   }
 
+  // ── Auto-heal — only show fully-green articles in the queue ───────────────
+  // Run runValidators(); if any fail AND they're heal-fixable AND we haven't
+  // exhausted retries, save with status='pending_heal' and fire the heal
+  // workflow. Healed POSTs increment X-Heal-Attempt so we can stop after N.
+  const healAttempt = Math.max(
+    0,
+    parseInt(req.headers.get("x-heal-attempt") ?? "0", 10) || 0,
+  );
+
+  const validatorResults = runValidators(filteredPost);
+  const redValidators = validatorResults.filter((r) => r.status === "fail");
+
+  let healStatus: "ok" | "pending_heal" | "heal_failed" = "ok";
+  let postToSave: Post = filteredPost;
+
+  if (redValidators.length > 0) {
+    if (hasFixableFailures(validatorResults) && healAttempt < MAX_HEAL_ATTEMPTS) {
+      healStatus = "pending_heal";
+      postToSave = { ...filteredPost, status: "pending_heal" as PostStatus };
+    } else {
+      // Non-fixable failures (sources/schema/ahpra) OR ran out of attempts.
+      // Land as heal_failed so the operator sees it explicitly rather than a
+      // silent red row in pending_review.
+      healStatus = "heal_failed";
+      postToSave = { ...filteredPost, status: "heal_failed" as PostStatus };
+    }
+  }
+
   const file: PostFile = {
     filename,
     filepath: "", // not used in DB mode
     ts: filename.match(/^(\d{8}_\d{6})_/)?.[1] ?? "",
-    post: filteredPost,
+    post: postToSave,
   };
 
   try {
-    await upsertPost(file, filteredPost);
+    await upsertPost(file, postToSave);
   } catch (e) {
     return NextResponse.json(
       { error: "upsert_failed", detail: String(e) },
@@ -126,9 +159,24 @@ export async function POST(req: Request) {
     );
   }
 
+  // Fire heal workflow_dispatch (don't fail the ingest if dispatch errors —
+  // the article is saved as pending_heal so operator can manually trigger).
+  let healDispatch: unknown = null;
+  if (healStatus === "pending_heal") {
+    try {
+      healDispatch = await dispatchHealWorkflow(postToSave.slug, validatorResults);
+    } catch (e) {
+      healDispatch = { ok: false, reason: "dispatch_threw", detail: String(e) };
+    }
+  }
+
   return NextResponse.json({
     ok: true,
-    slug: filteredPost.slug,
+    slug: postToSave.slug,
+    status: postToSave.status,
+    heal_attempt: healAttempt,
+    red_validators: redValidators.map((r) => r.check),
+    ...(healDispatch ? { heal_dispatch: healDispatch } : {}),
     ...(droppedCount > 0 ? { dropped: droppedCount, flags: responseFlags } : {}),
   });
 }
