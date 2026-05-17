@@ -1,31 +1,16 @@
 import "server-only";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 
 // ---------------------------------------------------------------------------
-// Whitelist loader — walks up from __dirname to find data/url-whitelist.json
+// Whitelist loader — static JSON import so Next.js / Vercel bundle the file
+// with the serverless function. The previous readFileSync(__dirname/...) path
+// broke on Vercel because the data/ directory lives one level above the
+// Next.js root (extracted/) and isn't traced into the function bundle.
+//
+// Python pipeline still reads the same file from disk (backend/validation/urls.py).
 // ---------------------------------------------------------------------------
+import WHITELIST_RAW from "../../../data/url-whitelist.json";
 
-function findWhitelistPath(): string {
-  let dir = __dirname;
-  for (let i = 0; i < 10; i++) {
-    const candidate = path.join(dir, "data", "url-whitelist.json");
-    try {
-      readFileSync(candidate, "utf8");
-      return candidate;
-    } catch {
-      /* keep walking up */
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error(
-    "data/url-whitelist.json not found walking up from " + __dirname
-  );
-}
-
-const WHITELIST = JSON.parse(readFileSync(findWhitelistPath(), "utf8")) as {
+const WHITELIST = WHITELIST_RAW as {
   version: number;
   domains: {
     domain: string;
