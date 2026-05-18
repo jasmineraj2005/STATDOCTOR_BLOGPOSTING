@@ -9,6 +9,11 @@
 .env.*.local
 backend/.env
 
+# GCP service account keys (never commit)
+*service-account*.json
+*credentials*.json
+statdoctor-seo-*.json
+
 # Python
 __pycache__/
 *.pyc
