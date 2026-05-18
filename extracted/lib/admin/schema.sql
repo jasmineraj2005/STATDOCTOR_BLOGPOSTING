@@ -136,3 +136,25 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 );
 CREATE INDEX IF NOT EXISTS pipeline_runs_run_idx ON pipeline_runs (run_id, ts);
 CREATE INDEX IF NOT EXISTS pipeline_runs_agent_idx ON pipeline_runs (agent_name, ts DESC);
+
+-- ── M9: post_revisions + soft delete (2026-05-18) ─────────────────────────────
+-- Convention 4 ("no hard deletes") + the audit-revertible edit history specced
+-- in ARCHITECTURE_101X. Both additions are idempotent.
+
+-- Snapshot of post.data + metadata for every edit. Lets us reconstruct any
+-- prior state without storing diffs.
+CREATE TABLE IF NOT EXISTS post_revisions (
+  id BIGSERIAL PRIMARY KEY,
+  slug TEXT NOT NULL REFERENCES posts(slug) ON DELETE CASCADE,
+  data JSONB NOT NULL,
+  edited_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  edited_by TEXT,
+  reason TEXT
+);
+CREATE INDEX IF NOT EXISTS post_revisions_slug_idx ON post_revisions (slug, edited_at DESC);
+
+-- Soft delete column. NULL = live; non-NULL = hidden from queue views.
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL;
+-- Partial index — most posts are live, so the index only covers the NULL set
+-- where queue queries spend their time.
+CREATE INDEX IF NOT EXISTS posts_active_idx ON posts (status, generated_at DESC) WHERE deleted_at IS NULL;

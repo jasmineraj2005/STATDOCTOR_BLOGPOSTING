@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { isAuthorised } from "@/lib/admin/auth";
-import { getPostBySlug, upsertPost, logAudit } from "@/lib/admin/store";
+import {
+  addPostRevision,
+  getPostBySlug,
+  logAudit,
+  upsertPost,
+} from "@/lib/admin/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -52,6 +57,12 @@ export async function POST(
     // Editing reverts a rejected post back to pending_review.
     status: "pending_review" as const,
   };
+
+  // M9: snapshot the pre-edit state to post_revisions BEFORE applying the
+  // patch. If addPostRevision throws we don't write the upsert — better to
+  // surface the failure than lose history silently.
+  await addPostRevision(slug, file.post, { reason: "edit via admin UI" });
+
   await upsertPost(file, updated);
 
   await logAudit({
