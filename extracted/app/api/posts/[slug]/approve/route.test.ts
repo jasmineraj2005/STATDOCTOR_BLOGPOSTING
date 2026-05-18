@@ -104,12 +104,12 @@ function makePost(overrides: Partial<Post> = {}): Post {
     faq_json_ld: {
       "@context": "https://schema.org",
       "@type": "FAQPage",
-      mainEntity: [
-        { "@type": "Question", name: "Q1?", acceptedAnswer: { "@type": "Answer", text: "A1" } },
-        { "@type": "Question", name: "Q2?", acceptedAnswer: { "@type": "Answer", text: "A2" } },
-        { "@type": "Question", name: "Q3?", acceptedAnswer: { "@type": "Answer", text: "A3" } },
-        { "@type": "Question", name: "Q4?", acceptedAnswer: { "@type": "Answer", text: "A4" } },
-      ],
+      // 8 entries — matches the guide FAQ floor (validators.json faq_floors.guide=8, M4 / B5).
+      mainEntity: Array.from({ length: 8 }, (_, i) => ({
+        "@type": "Question",
+        name: `Q${i + 1}?`,
+        acceptedAnswer: { "@type": "Answer", text: `A${i + 1}` },
+      })),
     },
     medical_webpage_schema: { "@type": "MedicalWebPage" },
     ahpra_flags: [],

@@ -58,12 +58,13 @@ function makePost(overrides: Partial<Post> = {}): Post {
     faq_json_ld: {
       "@context": "https://schema.org",
       "@type": "FAQPage",
-      mainEntity: [
-        { "@type": "Question", name: "Q1?", acceptedAnswer: { "@type": "Answer", text: "A1" } },
-        { "@type": "Question", name: "Q2?", acceptedAnswer: { "@type": "Answer", text: "A2" } },
-        { "@type": "Question", name: "Q3?", acceptedAnswer: { "@type": "Answer", text: "A3" } },
-        { "@type": "Question", name: "Q4?", acceptedAnswer: { "@type": "Answer", text: "A4" } },
-      ],
+      // 8 entries — meets the guide floor introduced in M4 (validators.json faq_floors.guide=8).
+      // Tests that need fewer/more questions override this field directly.
+      mainEntity: Array.from({ length: 8 }, (_, i) => ({
+        "@type": "Question",
+        name: `Q${i + 1}?`,
+        acceptedAnswer: { "@type": "Answer", text: `A${i + 1}` },
+      })),
     },
     medical_webpage_schema: { "@type": "MedicalWebPage" },
     ahpra_flags: [],
@@ -83,7 +84,7 @@ describe("AHPRA compliance", () => {
   it("passes when ahpra_passed and no review flags", () => {
     expect(result(makePost(), "ahpra").status).toBe("pass");
   });
-  it("fails when a flag requires human review", () => {
+  it("fails when a flag requires human review (legacy back-compat — no severity)", () => {
     const p = makePost({
       ahpra_flags: [
         {
@@ -98,6 +99,98 @@ describe("AHPRA compliance", () => {
   });
   it("fails when ahpra_passed is false", () => {
     expect(result(makePost({ ahpra_passed: false }), "ahpra").status).toBe("fail");
+  });
+
+  // M16: severity-aware gate.
+  it("fails when any flag is severity=error", () => {
+    const p = makePost({
+      ahpra_flags: [
+        {
+          flag_type: "forbidden_claim",
+          excerpt: "Australia's leading",
+          fix_applied: "remove",
+          requires_human_review: true,
+          severity: "error",
+        },
+      ],
+    });
+    expect(result(p, "ahpra").status).toBe("fail");
+  });
+
+  it("warns (doesn't block) when only severity=warn flags exist", () => {
+    const p = makePost({
+      ahpra_flags: [
+        {
+          flag_type: "unsupported_stat",
+          excerpt: "75% of locums",
+          fix_applied: "add citation",
+          requires_human_review: true,
+          severity: "warn",
+        },
+      ],
+    });
+    expect(result(p, "ahpra").status).toBe("warn");
+  });
+
+  it("passes when only severity=info flags exist (auto-fixed)", () => {
+    const p = makePost({
+      ahpra_flags: [
+        {
+          flag_type: "missing_disclaimer",
+          excerpt: "(auto-inject)",
+          fix_applied: "Auto-injected general disclaimer.",
+          requires_human_review: false,
+          severity: "info",
+        },
+        {
+          flag_type: "unsupported_stat",
+          excerpt: "75% of locums",
+          fix_applied: "auto-cited",
+          requires_human_review: false,
+          severity: "info",
+        },
+      ],
+    });
+    expect(result(p, "ahpra").status).toBe("pass");
+  });
+
+  it("error trumps warn when both present", () => {
+    const p = makePost({
+      ahpra_flags: [
+        {
+          flag_type: "unsupported_stat",
+          excerpt: "stat",
+          fix_applied: "",
+          requires_human_review: true,
+          severity: "warn",
+        },
+        {
+          flag_type: "forbidden_claim",
+          excerpt: "world-class",
+          fix_applied: "",
+          requires_human_review: true,
+          severity: "error",
+        },
+      ],
+    });
+    expect(result(p, "ahpra").status).toBe("fail");
+  });
+
+  it("isApprovable allows warns through (M16: warn != block)", () => {
+    const p = makePost({
+      ahpra_flags: [
+        {
+          flag_type: "unsupported_stat",
+          excerpt: "stat",
+          fix_applied: "",
+          requires_human_review: true,
+          severity: "warn",
+        },
+      ],
+    });
+    // ahpra check returns "warn"; isApprovable should still be true since no
+    // validators are failing.
+    expect(isApprovable(runValidators(p))).toBe(true);
   });
 });
 
@@ -180,31 +273,106 @@ describe("Comparison table", () => {
   it("passes when a markdown table is present", () => {
     expect(result(makePost(), "comparison_table").status).toBe("pass");
   });
-  it("warns when absent", () => {
+  it("fails when absent for guide content_type (M4 / B6)", () => {
     const md = makePost().content_markdown.replace(/\|.*\n/g, "");
-    expect(result(makePost({ content_markdown: md }), "comparison_table").status).toBe(
-      "warn",
-    );
+    expect(
+      result(makePost({ content_type: "guide", content_markdown: md }), "comparison_table")
+        .status,
+    ).toBe("fail");
+  });
+  it("warns when absent for news content_type", () => {
+    const md = makePost().content_markdown.replace(/\|.*\n/g, "");
+    expect(
+      result(makePost({ content_type: "news", content_markdown: md }), "comparison_table")
+        .status,
+    ).toBe("warn");
+  });
+  it("warns when absent for company content_type", () => {
+    const md = makePost().content_markdown.replace(/\|.*\n/g, "");
+    expect(
+      result(makePost({ content_type: "company", content_markdown: md }), "comparison_table")
+        .status,
+    ).toBe("warn");
   });
 });
 
+function faqEntities(n: number) {
+  return Array.from({ length: n }, (_, i) => ({
+    "@type": "Question",
+    name: `Q${i + 1}?`,
+    acceptedAnswer: { "@type": "Answer", text: `A${i + 1}` },
+  }));
+}
+
 describe("Schema shape", () => {
-  it("passes with FAQPage + ≥4 questions", () => {
+  it("passes when guide has ≥8 FAQs (floor)", () => {
+    // makePost default is 8 FAQs + content_type=guide.
     expect(result(makePost(), "schema").status).toBe("pass");
   });
-  it("fails when FAQ has < 4 questions", () => {
+
+  it("fails when guide has <8 FAQs (M4 / B5)", () => {
     const p = makePost({
+      content_type: "guide",
       faq_json_ld: {
         "@context": "https://schema.org",
         "@type": "FAQPage",
-        mainEntity: [{ "@type": "Question", name: "Q1?" }],
+        mainEntity: faqEntities(5),
       },
     });
     expect(result(p, "schema").status).toBe("fail");
   });
+
+  it("passes when news has ≥6 FAQs (floor)", () => {
+    const p = makePost({
+      content_type: "news",
+      faq_json_ld: {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqEntities(6),
+      },
+    });
+    expect(result(p, "schema").status).toBe("pass");
+  });
+
+  it("fails when news has <6 FAQs", () => {
+    const p = makePost({
+      content_type: "news",
+      faq_json_ld: {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqEntities(5),
+      },
+    });
+    expect(result(p, "schema").status).toBe("fail");
+  });
+
+  it("passes when company has ≥4 FAQs (floor)", () => {
+    const p = makePost({
+      content_type: "company",
+      faq_json_ld: {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqEntities(4),
+      },
+    });
+    expect(result(p, "schema").status).toBe("pass");
+  });
+
+  it("fails when company has <4 FAQs", () => {
+    const p = makePost({
+      content_type: "company",
+      faq_json_ld: {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqEntities(3),
+      },
+    });
+    expect(result(p, "schema").status).toBe("fail");
+  });
+
   it("fails when @type is wrong", () => {
     const p = makePost({
-      faq_json_ld: { "@type": "WebPage", mainEntity: [{}, {}, {}, {}] },
+      faq_json_ld: { "@type": "WebPage", mainEntity: faqEntities(8) },
     });
     expect(result(p, "schema").status).toBe("fail");
   });
@@ -224,8 +392,8 @@ describe("Word count", () => {
       .toBe("pass");
   });
 
-  it("words validator fails when below floor for content_type=news", () => {
-    const r = result(makePost({ content_type: "news", word_count: 1000 }), "word_count");
+  it("words validator fails when below floor for content_type=news (floor 1000 after M5b)", () => {
+    const r = result(makePost({ content_type: "news", word_count: 800 }), "word_count");
     expect(r.status).toBe("fail");
     expect(r.detail).toMatch(/below floor/i);
   });
@@ -241,12 +409,12 @@ describe("Word count", () => {
     expect(r.status).toBe("pass");
   });
 
-  // Boundary tests at floor & ceiling exact values:
+  // Boundary tests at floor & ceiling exact values (M5b: news lowered to 1000–1500):
   it.each([
-    ["news",    1499, "fail"],
+    ["news",     999, "fail"],
+    ["news",    1000, "pass"],
     ["news",    1500, "pass"],
-    ["news",    2000, "pass"],
-    ["news",    2001, "warn"],
+    ["news",    1501, "warn"],
     ["guide",   1499, "fail"],
     ["guide",   1500, "pass"],
     ["guide",   2500, "pass"],
@@ -308,10 +476,19 @@ describe("isApprovable", () => {
     const p = makePost({ ahpra_passed: false });
     expect(isApprovable(runValidators(p))).toBe(false);
   });
-  it("is true even with warns (e.g. comparison table missing)", () => {
+  it("is true even with warns (e.g. comparison table missing on news)", () => {
     const md = makePost().content_markdown.replace(/\|.*\n/g, "");
-    const p = makePost({ content_markdown: md });
-    // Verify table validator warns (doesn't fail).
+    // News + company warn (not fail) when no table. Guide fails after M4 / B6.
+    const p = makePost({
+      content_type: "news",
+      content_markdown: md,
+      // News floor for FAQs is 6 — make sure schema still passes by trimming.
+      faq_json_ld: {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqEntities(6),
+      },
+    });
     expect(result(p, "comparison_table").status).toBe("warn");
     expect(isApprovable(runValidators(p))).toBe(true);
   });

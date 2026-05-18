@@ -123,9 +123,8 @@ def heal(slug: str) -> dict[str, Any]:
         slug=slug,
         rejection_reason="heal_agent",
         original_content=post["content_markdown"],
+        extra_instruction=instruction,
     )
-    # Stitch the heal instructions into a second regenerate pass if needed —
-    # for v1 we trust writer.regenerate to handle the most common drift.
 
     patched = dict(post)
     patched["content_markdown"] = new_content

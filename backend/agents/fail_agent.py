@@ -32,7 +32,8 @@ except FileNotFoundError:
     _CFG = {}
 
 _WORD_FLOORS: dict[str, int] = _CFG.get("word_floors") or {
-    "news": 1500,
+    # Fallback only if validators.json fails to load; kept in sync with that file (M5b).
+    "news": 1000,
     "guide": 1500,
     "company": 1000,
 }
