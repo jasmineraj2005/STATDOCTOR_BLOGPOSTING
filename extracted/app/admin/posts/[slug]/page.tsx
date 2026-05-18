@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { isAuthorised } from "@/lib/admin/auth";
-import { getPostBySlug } from "@/lib/admin/store";
+import { getPostBySlug, getPostRevisions, type PostRevision } from "@/lib/admin/store";
 import { runValidators, isApprovable, type ValidationResult } from "@/lib/admin/validators";
 import {
   CONTENT_TYPE_LABELS,
@@ -29,9 +29,21 @@ export default async function PostEditPage({
   const validators = runValidators(post);
   const approvable = isApprovable(validators);
 
+  // M9 finish: surface the post_revisions history (newest first).
+  const revisions = await getPostRevisions(slug);
+
+  // Compact validator summary for the top action bar.
+  const validatorTally = {
+    pass: validators.filter((r) => r.status === "pass").length,
+    warn: validators.filter((r) => r.status === "warn").length,
+    fail: validators.filter((r) => r.status === "fail").length,
+  };
+  const hasHistory = !!(post.rejection_history && post.rejection_history.length > 0);
+  const hasRevisions = revisions.length > 0;
+
   return (
     <main className="min-h-[calc(100vh-3.5rem)] bg-white pt-8 pb-32 px-6">
-      <div className="max-w-[1300px] mx-auto">
+      <div className="max-w-[1100px] mx-auto">
         <Link
           href="/admin/posts"
           className="inline-block text-[10px] font-semibold tracking-widest uppercase text-indigo-600 hover:underline"
@@ -39,7 +51,7 @@ export default async function PostEditPage({
           ← Back to queue
         </Link>
 
-        {/* Page header */}
+        {/* Page header — title + content-type chips + APPROVE / HEAL */}
         <div className="mt-4 flex items-start justify-between gap-6 flex-wrap">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -56,7 +68,9 @@ export default async function PostEditPage({
             <h1 className="text-3xl md:text-4xl font-semibold text-gray-900 leading-tight">
               {post.title}
             </h1>
-            <p className="mt-2 text-gray-500 text-sm max-w-2xl">{post.tldr}</p>
+            {/* TL;DR removed from header — the rendered preview shows it in a
+                styled callout box (article-preview-pane.tsx). One source for the
+                TL;DR avoids drift between header and body. */}
           </div>
           <div className="flex gap-2">
             {!approvable && (
@@ -87,28 +101,88 @@ export default async function PostEditPage({
           </div>
         </div>
 
-        {/* ── Preview + Validators grid (preview PRIMARY, left; validators right) ── */}
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
-          {/* Left: rendered article preview — top of fold, what CEO reads first */}
-          <section>
-            <ArticlePreviewPane post={post} />
-          </section>
+        {/* ── Jump-link chips — quick navigation to the panels below ──────── */}
+        <nav className="mt-5 flex flex-wrap gap-2 items-center text-[10px] font-semibold tracking-widest uppercase">
+          <span className="text-gray-400">Jump to:</span>
+          <a
+            href="#validators"
+            className="px-3 py-1 rounded-full border border-gray-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600 inline-flex items-center gap-2"
+          >
+            <span>Validators</span>
+            <span className="flex gap-1" aria-label="validator status counts">
+              {validatorTally.fail > 0 && (
+                <span className="px-1.5 rounded bg-red-100 text-red-700">{validatorTally.fail} fail</span>
+              )}
+              {validatorTally.warn > 0 && (
+                <span className="px-1.5 rounded bg-amber-100 text-amber-700">{validatorTally.warn} warn</span>
+              )}
+              {validatorTally.fail === 0 && validatorTally.warn === 0 && (
+                <span className="px-1.5 rounded bg-emerald-100 text-emerald-700">all green</span>
+              )}
+            </span>
+          </a>
+          <a
+            href="#reject"
+            className="px-3 py-1 rounded-full border border-gray-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600"
+          >
+            Reject
+          </a>
+          {hasHistory && (
+            <a
+              href="#history"
+              className="px-3 py-1 rounded-full border border-gray-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600"
+            >
+              History ({post.rejection_history!.length})
+            </a>
+          )}
+          {hasRevisions && (
+            <a
+              href="#revisions"
+              className="px-3 py-1 rounded-full border border-gray-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600"
+            >
+              Revisions ({revisions.length})
+            </a>
+          )}
+          <a
+            href="#edit"
+            className="px-3 py-1 rounded-full border border-gray-200 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-gray-600"
+          >
+            Edit
+          </a>
+        </nav>
 
-          {/* Right: validator panel + reject form (sticky on large screens) */}
-          <aside className="space-y-6 lg:sticky lg:top-8 lg:self-start">
-            <ValidatorPanel results={validators} />
-            <RejectForm slug={post.slug} />
-            {post.rejection_history && post.rejection_history.length > 0 && (
-              <RejectionHistory entries={post.rejection_history} />
-            )}
-          </aside>
-        </div>
+        {/* ── Article preview — full-width, readable column ───────────────── */}
+        <section className="mt-8">
+          <ArticlePreviewPane post={post} />
+        </section>
+
+        {/* ── Below-fold review panels — anchored for top-nav jump-links ──── */}
+        <section id="validators" className="mt-12 scroll-mt-24">
+          <ValidatorPanel results={validators} />
+        </section>
+
+        <section id="reject" className="mt-6 scroll-mt-24">
+          <RejectForm slug={post.slug} />
+        </section>
+
+        {hasHistory && (
+          <section id="history" className="mt-6 scroll-mt-24">
+            <RejectionHistory entries={post.rejection_history!} />
+          </section>
+        )}
+
+        {hasRevisions && (
+          <section id="revisions" className="mt-6 scroll-mt-24">
+            <RevisionsPanel revisions={revisions} />
+          </section>
+        )}
 
         {/* ── Editor form — foldable, below the preview ────────────────────── */}
         {/* Default closed so the CEO reads the rendered article first and only
             opens the editor if they need to tweak metadata or markdown. */}
         <details
-          className="mt-10 rounded-2xl border border-gray-200 bg-white shadow-sm"
+          id="edit"
+          className="mt-10 rounded-2xl border border-gray-200 bg-white shadow-sm scroll-mt-24"
           data-testid="editor-fold"
         >
           <summary className="flex cursor-pointer select-none items-center justify-between px-6 py-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-2xl">
@@ -267,6 +341,45 @@ function RejectionHistory({
             {e.text && <>: {e.text}</>}
           </li>
         ))}
+      </ul>
+    </div>
+  );
+}
+
+function RevisionsPanel({ revisions }: { revisions: PostRevision[] }) {
+  return (
+    <div className="rounded-2xl bg-white border border-gray-200 p-5">
+      <h3 className="text-[10px] font-semibold tracking-widest uppercase text-indigo-600 mb-3">
+        Revision history ({revisions.length})
+      </h3>
+      <p className="text-[11px] text-gray-500 mb-4 leading-snug">
+        A snapshot is written before every edit. Newest first. Use these to spot
+        when a section got accidentally trimmed or a fact slipped out.
+      </p>
+      <ul className="space-y-3 text-xs text-gray-900/85">
+        {revisions.map((r) => {
+          const words = (r.data.content_markdown ?? "").split(/\s+/).filter(Boolean).length;
+          return (
+            <li key={r.id} className="border-l-2 border-indigo-100 pl-3 py-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-[11px] text-gray-700">
+                  {new Date(r.edited_at).toLocaleString("en-AU")}
+                </span>
+                <span className="text-[10px] font-medium text-gray-500">
+                  {words} words
+                </span>
+                {r.edited_by && (
+                  <span className="text-[10px] font-medium text-indigo-600">
+                    by {r.edited_by}
+                  </span>
+                )}
+              </div>
+              {r.reason && (
+                <div className="text-[11px] text-gray-600 mt-0.5">{r.reason}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

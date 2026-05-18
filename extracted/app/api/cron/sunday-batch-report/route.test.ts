@@ -177,7 +177,10 @@ describe("GET /api/cron/sunday-batch-report", () => {
         ([url]) => url === "https://api.resend.com/emails",
       );
       expect(resendCall).toBeDefined();
-      const sentBody = JSON.parse(resendCall![1].body as string);
+      // resendCall is mockFetch's call args; cast to access the init options.
+      const sentBody = JSON.parse(
+        (resendCall as unknown as [string, { body: string }])[1].body,
+      );
       expect(sentBody.to).toBe("test@example.com");
       expect(sentBody.subject).toContain("Sunday batch");
       expect(sentBody.html).toContain("article-1");

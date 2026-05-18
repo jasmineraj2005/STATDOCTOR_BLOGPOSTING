@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS posts (
   generated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   date_modified    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_reviewed_at TIMESTAMPTZ,
+  deleted_at       TIMESTAMPTZ,
   data             JSONB NOT NULL
 );
 `;

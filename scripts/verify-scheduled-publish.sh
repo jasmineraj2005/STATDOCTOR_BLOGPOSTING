@@ -25,6 +25,7 @@ POSTGRES_URL="${POSTGRES_URL}" \
   INGEST_TOKEN="${INGEST_TOKEN}" \
   CRON_SECRET="${CRON_SECRET}" \
   WEBSITE_POSTS_DIR=/tmp/sd-publish-test \
+  ADMIN_TOKEN= \
   pnpm dev > /tmp/sd-dev.log 2>&1 &
 echo $! > /tmp/sd-dev.pid
 until grep -qE "Ready in|Failed|EADDRINUSE" /tmp/sd-dev.log 2>/dev/null; do sleep 1; done
@@ -45,7 +46,7 @@ post = {
     "meta_description": "A$1600/day senior locum rates in Sydney for 2026.",
     "focus_keyword": "locum work sydney",
     "og_image_alt": "Sydney public hospital ward.",
-    "content_markdown": "**TL;DR:** test\n\n## Background\n[AHPRA](https://www.ahpra.gov.au/) is the entry point.\n\n> [KEY FACTS] These figures come from AIHW.\n\n> [INFO] Refer to [AIHW data](https://www.aihw.gov.au/).\n\n> [AU] [NSW Health](https://www.health.nsw.gov.au/) sets the floor.\n\n> [KEY TAKEAWAY] DB ingest works.\n\n## Pay\n\n| Tier | Daily |\n| --- | --- |\n| Junior | A$1100 |\n| Senior | A$1600 |\n\n## FAQ\n\n### Q1?\nA1.\n\n### Q2?\nA2.\n\n### Q3?\nA3.\n\n### Q4?\nA4.\n\n## Sources\n",
+    "content_markdown": "**TL;DR:** test\n\n## Background\n[AHPRA](https://www.ahpra.gov.au/) is the entry point.\n\n> [KEY FACTS] These figures come from AIHW.\n\n> [INFO] Refer to [AIHW data](https://www.aihw.gov.au/).\n\n> [AU] [NSW Health](https://www.health.gov.au/) sets the floor.\n\n> [KEY TAKEAWAY] DB ingest works.\n\n## Pay\n\n| Tier | Daily |\n| --- | --- |\n| Junior | A$1100 |\n| Senior | A$1600 |\n\n## FAQ\n\n### Q1?\nA1.\n\n### Q2?\nA2.\n\n### Q3?\nA3.\n\n### Q4?\nA4.\n\n## Sources\n",
     "tldr": "Test post",
     "pillar": "locum_pay_rates",
     "content_type": "guide",
@@ -57,14 +58,14 @@ post = {
     "sources": [
         {"title": "AHPRA", "url": "https://www.ahpra.gov.au/", "publisher": "AHPRA", "snippet": ""},
         {"title": "AIHW", "url": "https://www.aihw.gov.au/", "publisher": "AIHW", "snippet": ""},
-        {"title": "NSW Health", "url": "https://www.health.nsw.gov.au/", "publisher": "NSW Health", "snippet": ""},
+        {"title": "Department of Health", "url": "https://www.health.gov.au/", "publisher": "Department of Health", "snippet": ""},
+        {"title": "The Guardian", "url": "https://www.theguardian.com/society/locum-rates", "publisher": "The Guardian", "snippet": ""},
     ],
     "image_url": None, "image_credit": None,
     "faq_json_ld": {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
-        {"@type": "Question", "name": "Q1?", "acceptedAnswer": {"@type": "Answer", "text": "A1"}},
-        {"@type": "Question", "name": "Q2?", "acceptedAnswer": {"@type": "Answer", "text": "A2"}},
-        {"@type": "Question", "name": "Q3?", "acceptedAnswer": {"@type": "Answer", "text": "A3"}},
-        {"@type": "Question", "name": "Q4?", "acceptedAnswer": {"@type": "Answer", "text": "A4"}},
+        # 8 entries — meets the guide floor (validators.json faq_floors.guide=8, M4 / B5).
+        {"@type": "Question", "name": f"Q{i}?", "acceptedAnswer": {"@type": "Answer", "text": f"A{i}"}}
+        for i in range(1, 9)
     ]},
     "medical_webpage_schema": {"@type": "MedicalWebPage"},
     "ahpra_flags": [], "ahpra_passed": True,

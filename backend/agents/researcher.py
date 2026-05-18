@@ -18,6 +18,8 @@ import re
 import sys
 import os
 import urllib.parse
+from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 from openai import OpenAI
@@ -40,7 +42,70 @@ USED_IMAGES_LOG = OUTPUT_DIR / "used_images.json"
 
 BUDGET_TOKENS_PER_TOPIC: int = int(os.getenv("RESEARCHER_BUDGET_TOKENS", "50000"))
 MIN_OK_SOURCES: int = 5
+# M6 / Bug B7: distinct-publisher + authoritative-source gates. Validator at the
+# admin side requires ≥3 distinct publishers AND ≥1 authoritative source; the
+# researcher must clear the same bar before the writer runs.
+MIN_DISTINCT_PUBLISHERS: int = 3
 MAX_REBROADEN_RETRIES: int = 2
+
+_VALIDATORS_JSON_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "extracted" / "lib" / "admin" / "validators.json"
+)
+_AUTHORITATIVE_DOMAINS: set[str] | None = None
+
+
+def _get_authoritative_domains() -> set[str]:
+    """Load authoritative_domains from validators.json once.
+
+    Mirrors writer._get_word_floors lazy-loader pattern so tests can monkeypatch.
+    """
+    global _AUTHORITATIVE_DOMAINS
+    if _AUTHORITATIVE_DOMAINS is not None:
+        return _AUTHORITATIVE_DOMAINS
+    import agents.researcher as _self
+    with open(_self._VALIDATORS_JSON_PATH, encoding="utf-8") as fh:
+        data = json.load(fh)
+    _AUTHORITATIVE_DOMAINS = {d.lower() for d in data.get("authoritative_domains", [])}
+    return _AUTHORITATIVE_DOMAINS
+
+
+def _hostname_of(url: str) -> str:
+    """Return ``host.tld`` for a URL with ``www.`` stripped, lowercased."""
+    try:
+        host = urlparse(url).hostname or ""
+    except ValueError:
+        return ""
+    return host.lower().removeprefix("www.")
+
+
+def _is_authoritative(source: Source) -> bool:
+    """A source is authoritative if its hostname is in validators.json authoritative_domains."""
+    host = _hostname_of(source.url)
+    if not host:
+        return False
+    domains = _get_authoritative_domains()
+    # Match host exactly OR any suffix match (e.g. apo.health.gov.au matches health.gov.au)
+    return any(host == d or host.endswith(f".{d}") for d in domains)
+
+
+def _distinct_publishers(sources: list[Source]) -> int:
+    return len({s.publisher.strip() for s in sources if (s.publisher or "").strip()})
+
+
+def _diversity_gate_passed(sources: list[Source]) -> tuple[bool, str]:
+    """Return (passed, reason). Used by the re-broaden loop in get_research()."""
+    if len(sources) < MIN_OK_SOURCES:
+        return False, f"only {len(sources)} valid sources (need {MIN_OK_SOURCES})"
+    publishers = _distinct_publishers(sources)
+    if publishers < MIN_DISTINCT_PUBLISHERS:
+        return False, (
+            f"only {publishers} distinct publisher(s) "
+            f"(need {MIN_DISTINCT_PUBLISHERS} — validator gate)"
+        )
+    if not any(_is_authoritative(s) for s in sources):
+        return False, "no authoritative source among the validated set"
+    return True, "ok"
 
 
 def _build_chart_url(statistics: list[str], topic_title: str) -> str | None:
@@ -209,62 +274,6 @@ def _scrape_og_image(url: str) -> tuple[str | None, str | None, str | None]:
         author = m_author.group(1).strip() or None
 
     return image_url, author, alt_text
-
-
-def _fetch_wikimedia_image(query: str) -> tuple[str | None, str | None, str | None]:
-    """Wikimedia Commons search as a fallback when OG-scrape returns nothing.
-
-    Returns (image_url, credit_author, alt_text). Real attributable images,
-    free to reuse with credit. We filter to CC/PD-licensed files only so the
-    attribution we emit is honest.
-    """
-    if not query:
-        return None, None, None
-    params = {
-        "action": "query",
-        "format": "json",
-        "prop": "imageinfo",
-        "generator": "search",
-        "gsrnamespace": "6",  # File namespace
-        "gsrlimit": "5",
-        "gsrsearch": query,
-        "iiprop": "url|extmetadata|mime",
-    }
-    try:
-        r = httpx.get(
-            "https://commons.wikimedia.org/w/api.php",
-            params=params,
-            headers={"User-Agent": "StatDoctorBot/1.0 (+https://statdoctor.app)"},
-            timeout=8,
-        )
-        r.raise_for_status()
-        pages = (r.json().get("query") or {}).get("pages") or {}
-    except Exception as e:
-        print(f"  [Researcher] Wikimedia error: {e}")
-        return None, None, None
-
-    permissive_licenses = ("cc-by", "cc0", "public domain", "pd-", "cc by")
-    for page in pages.values():
-        info_list = page.get("imageinfo") or []
-        if not info_list:
-            continue
-        info = info_list[0]
-        mime = (info.get("mime") or "").lower()
-        if mime not in ("image/jpeg", "image/png", "image/webp"):
-            continue
-        meta = info.get("extmetadata") or {}
-        license_short = (meta.get("LicenseShortName") or {}).get("value", "").lower()
-        if not any(lic in license_short for lic in permissive_licenses):
-            continue
-        image_url = info.get("url")
-        if not image_url or _is_blocked_image_url(image_url):
-            continue
-        artist_raw = (meta.get("Artist") or {}).get("value", "")
-        artist = re.sub(r"<[^>]+>", "", artist_raw).strip() or "Wikimedia Commons"
-        description_raw = (meta.get("ImageDescription") or {}).get("value", "")
-        alt = re.sub(r"<[^>]+>", "", description_raw).strip()[:200] or query
-        return image_url, artist, alt
-    return None, None, None
 
 
 def _search_guardian(query: str, n: int = 8) -> list[dict]:
@@ -549,16 +558,11 @@ Rules:
             og_alt: str | None = None
             if src_url:
                 og_image_url, og_author, og_alt = _scrape_og_image(src_url)
-            # Wikimedia Commons fallback when the publisher page has no og:image.
-            # Uses the source title as the search query — topical match.
+            # Wikimedia fallback removed (2026-05-18): only credited publisher
+            # imagery (Guardian CDN or OG-scrape) is accepted. If neither
+            # surfaces an image, the source ships without one — better no
+            # image than a loosely-topical Wikimedia match.
             image_credit_publisher = src_publisher if og_image_url else None
-            if not og_image_url:
-                wm_url, wm_artist, wm_alt = _fetch_wikimedia_image(s.get("title", ""))
-                if wm_url:
-                    og_image_url = wm_url
-                    og_author = wm_artist
-                    og_alt = wm_alt
-                    image_credit_publisher = "Wikimedia Commons"
             all_sources.append(
                 Source(
                     title=s.get("title", ""),
@@ -593,16 +597,37 @@ Rules:
                 for d in ok_dicts
             ]
 
-            if len(validated_sources) >= MIN_OK_SOURCES:
-                break  # enough — proceed
+            # M6 / Bug B7: gate is now distinct-publisher + authoritative aware,
+            # matching the server-side validator. Without this the researcher
+            # ships 5 Guardian-only sources and the post then fails the admin
+            # `sources` validator (which requires ≥3 publishers + ≥1 authoritative).
+            passed, reason = _diversity_gate_passed(validated_sources)
+            if passed:
+                break  # enough diversity — proceed
 
             if retry < MAX_REBROADEN_RETRIES:
-                # Re-broaden: widen the Guardian query and re-fetch
                 print(
-                    f"  [Researcher] Only {len(validated_sources)} valid sources after validation "
-                    f"(need {MIN_OK_SOURCES}), re-broadening (attempt {retry + 1}/{MAX_REBROADEN_RETRIES})…"
+                    f"  [Researcher] diversity gate failed: {reason}. "
+                    f"Re-broadening (attempt {retry + 1}/{MAX_REBROADEN_RETRIES})…"
                 )
-                broad_query = " ".join(topic.target_keywords) + " Australia healthcare"
+
+                publishers = _distinct_publishers(validated_sources)
+                has_authoritative = any(_is_authoritative(s) for s in validated_sources)
+
+                if has_authoritative and publishers < MIN_DISTINCT_PUBLISHERS:
+                    # Authoritative covered, need broader publisher mix — widen Guardian
+                    broad_query = " ".join(topic.target_keywords) + " Australia healthcare"
+                elif not has_authoritative:
+                    # Steer the broaden query at authoritative AU health orgs. The
+                    # LLM-suggested URLs still pass through the URL whitelist gate,
+                    # so we won't accept hallucinated domains.
+                    broad_query = (
+                        " ".join(topic.target_keywords)
+                        + " Australia AHPRA AIHW health workforce"
+                    )
+                else:
+                    broad_query = " ".join(topic.target_keywords) + " Australia healthcare"
+
                 broad_results = _search_guardian(broad_query, n=12)
                 new_guardian: list[Source] = []
                 seen_urls = {s.url for s in all_sources}
@@ -630,10 +655,11 @@ Rules:
                     )
                 all_sources = all_sources + new_guardian
             else:
-                # Exhausted retries
+                # Exhausted retries — abort with the specific reason.
                 print(
                     f"  [Researcher] ABORTED topic={topic.title!r} "
-                    f"valid_sources={len(validated_sources)} status=too_few_valid_sources"
+                    f"valid_sources={len(validated_sources)} status=too_few_valid_sources "
+                    f"reason={reason!r}"
                 )
                 return _make_aborted_brief(topic, "too_few_valid_sources")
 

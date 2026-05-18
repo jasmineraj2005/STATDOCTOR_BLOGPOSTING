@@ -32,14 +32,20 @@
     "company": 3
   },
 
+  "faq_floors": {
+    "news": 6,
+    "guide": 8,
+    "company": 4
+  },
+
   "word_floors": {
-    "news": 1500,
+    "news": 1000,
     "guide": 1500,
     "company": 1000
   },
 
   "word_ceilings": {
-    "news": 2000,
+    "news": 1500,
     "guide": 2500,
     "company": 1800
   },

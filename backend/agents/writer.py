@@ -26,6 +26,7 @@ Word floors (M2.T1) are loaded from validators.json (single source of truth).
 
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ from openai import OpenAI
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from agents.ahpra import AHPRA_PROHIBITED_CONTENT_BLOCK
 from config import OPENAI_API_KEY, WRITER_MODEL, SITE_URL
 from models import BlogPost, ContentPillar, ContentType, ResearchBrief
 
@@ -60,6 +62,16 @@ _VALIDATORS_JSON_PATH: str = str(
 
 # Module-level cache — populated lazily so tests can monkeypatch the path.
 _WORD_FLOORS: dict | None = None
+_AHPRA_BANNED: list[dict] | None = None
+_EDITORIALLY_BANNED: list[dict] | None = None
+
+
+def _load_validators() -> dict:
+    """Read validators.json fresh. Used by all lazy getters below."""
+    import agents.writer as _self
+    path = _self._VALIDATORS_JSON_PATH
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def _get_word_floors() -> dict:
@@ -71,12 +83,70 @@ def _get_word_floors() -> dict:
     global _WORD_FLOORS
     if _WORD_FLOORS is not None:
         return _WORD_FLOORS
-    import agents.writer as _self
-    path = _self._VALIDATORS_JSON_PATH
-    with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    _WORD_FLOORS = data["word_floors"]
+    _WORD_FLOORS = _load_validators()["word_floors"]
     return _WORD_FLOORS
+
+
+def _get_ahpra_banned() -> list[dict]:
+    """Return the ahpra_banned list from validators.json (single source of truth, M3/B2).
+
+    Each entry has the shape ``{"pattern": "<regex>", "reason": "<doc string>"}``.
+    """
+    global _AHPRA_BANNED
+    if _AHPRA_BANNED is not None:
+        return _AHPRA_BANNED
+    _AHPRA_BANNED = _load_validators()["ahpra_banned"]
+    return _AHPRA_BANNED
+
+
+def _get_editorially_banned() -> list[dict]:
+    """Return the editorially_banned list from validators.json (M3 closes drift with line 287)."""
+    global _EDITORIALLY_BANNED
+    if _EDITORIALLY_BANNED is not None:
+        return _EDITORIALLY_BANNED
+    _EDITORIALLY_BANNED = _load_validators()["editorially_banned"]
+    return _EDITORIALLY_BANNED
+
+
+def _pattern_to_human(pattern: str) -> str:
+    """Best-effort regex → human-readable phrase for prompt display.
+
+    The regex is the authoritative form (used by validators); the human phrase
+    is for the LLM to internalise. Output keeps the meaning while stripping
+    common regex tokens (\b word boundaries, character classes, anchor groups).
+    """
+    s = pattern
+    s = re.sub(r"\\b", "", s)                          # word boundaries
+    s = re.sub(r"\(\?:[^)]+\)", "", s)                 # non-capturing anchor groups, e.g. (?:^|[^\w])
+    s = s.replace(r"[\s-]?", " ").replace(r"[\s-]", " ")
+    s = s.replace(r"\s?", " ").replace(r"\s+", " ")
+    # Capture-group alternations: (best|leading|top) → best/leading/top
+    s = re.sub(r"\(([^)]+)\)", lambda m: m.group(1).replace("|", "/"), s)
+    # Drop optional-quantifier markers on plain words: word? → word, word?s → word
+    s = re.sub(r"(\w)\?", r"\1", s)
+    s = s.replace("\\", "")
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _render_banned_phrases_block() -> str:
+    """Render ahpra_banned for the writer prompt — one bullet per pattern.
+
+    Each line includes both the human-readable phrase AND the canonical regex,
+    so the LLM has explicit guidance and any prompt-text drift test can still
+    grep for the regex pattern from validators.json. Single source of truth.
+    """
+    lines: list[str] = []
+    for entry in _get_ahpra_banned():
+        pattern = entry["pattern"]
+        human = _pattern_to_human(pattern)
+        lines.append(f'  - "{human}" (regex: `{pattern}`)')
+    return "\n".join(lines)
+
+
+def _render_editorially_banned_block() -> str:
+    """Render editorially_banned as a comma-separated quoted list."""
+    return ", ".join(f'"{_pattern_to_human(e["pattern"])}"' for e in _get_editorially_banned())
 
 
 def _derive_content_type(pillar: ContentPillar) -> ContentType:
@@ -163,6 +233,17 @@ def _build_draft_prompt(
 ) -> str:
     """Return the full draft-pass prompt, embedding the outline as a hard constraint."""
     return f"""You are an expert medical content writer for StatDoctor ({SITE_URL}), Australia's locum doctor marketplace.
+
+═══════════════════════════════════
+AHPRA COMPLIANCE (coach-and-scan — non-negotiable)
+═══════════════════════════════════
+This article will be scanned post-generation by an AHPRA reviewer; passages
+violating the rules below are rejected and re-queued. Follow the rules upfront
+so the article ships first time.
+
+{AHPRA_PROHIBITED_CONTENT_BLOCK}
+
+═══════════════════════════════════
 
 Write a complete, publication-ready blog post. You MUST write at least {floor} words — this is a hard
 requirement, not a suggestion. Articles below {floor} words are rejected by the validator and re-queued
@@ -281,10 +362,12 @@ WRITING RULES:
 - Australian English spelling (organisation, licence, practise, recognise)
 - Write for time-poor doctors — no filler, no padding
 - Be specific: use real city names, real dollar figures, real regulatory references
-- Forbidden words (AHPRA bans): "best doctor", "number one", "#1", "guaranteed", "cure", "leading specialist", "most experienced", "world-class"
+- Include at least one markdown comparison table (e.g. tiers × daily rate, location × pay band, agency × fee). Guides without a table fail the validator.
+- Forbidden phrases (AHPRA bans — these regexes must not match in your output):
+{_render_banned_phrases_block()}
 - If giving financial or clinical guidance, include: "This is general information only. Consult a qualified adviser."
 - Cite sources inline with markdown links. Do not make up statistics.
-- Do not use the word "comprehensive" or "delve"
+- Editorially banned (do not use): {_render_editorially_banned_block()}
 
 Write the complete post now. Output only the markdown — no preamble:"""
 
@@ -459,7 +542,12 @@ _REJECTION_LABELS: dict[str, str] = {
 }
 
 
-def regenerate(slug: str, rejection_reason: str, original_content: str) -> str:
+def regenerate(
+    slug: str,
+    rejection_reason: str,
+    original_content: str,
+    extra_instruction: str | None = None,
+) -> str:
     """Regenerate a rejected draft, addressing the specific rejection reason.
 
     Parameters
@@ -471,6 +559,11 @@ def regenerate(slug: str, rejection_reason: str, original_content: str) -> str:
         description of why the draft was rejected.
     original_content:
         The Markdown content of the rejected draft.
+    extra_instruction:
+        Optional surgical fix directive assembled by heal_agent.build_instruction.
+        When present (heal flow, M2/B1) it is appended to the prompt so the LLM
+        targets the specific failing validator (banned-phrase removal, word-count
+        expansion, etc.) instead of a generic "rejected" rewrite.
 
     Returns
     -------
@@ -480,14 +573,21 @@ def regenerate(slug: str, rejection_reason: str, original_content: str) -> str:
     # Resolve human label if a known code was passed
     human_label = _REJECTION_LABELS.get(rejection_reason, rejection_reason)
 
+    surgical_block = (
+        f"\nSPECIFIC FIX REQUIRED:\n{extra_instruction}\n"
+        if extra_instruction
+        else ""
+    )
+
     prompt = (
         f"Your previous draft was rejected because [{rejection_reason}]: {human_label}. "
         f"Rewrite addressing this specifically.\n\n"
-        f"Original draft:\n\n{original_content}\n\n"
+        f"Original draft:\n\n{original_content}\n"
+        f"{surgical_block}\n"
         f"Instructions:\n"
         f"- Fix the issue described above throughout the entire article.\n"
         f"- Do not change the structure, headings, or factual claims unless they are the root cause.\n"
-        f"- Preserve word count (do not shorten the article).\n"
+        f"- Preserve word count (do not shorten the article) unless the SPECIFIC FIX above asks for expansion.\n"
         f"- Output only the corrected Markdown — no preamble."
     )
 

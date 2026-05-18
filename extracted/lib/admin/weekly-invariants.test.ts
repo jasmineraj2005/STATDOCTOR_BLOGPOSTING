@@ -15,27 +15,30 @@ function buildDb(responses: Map<string, { rows: Record<string, unknown>[] }>): D
 
   return {
     insertedAlerts,
-    async query(text: string, values?: unknown[]) {
+    async query<T extends Record<string, unknown>>(
+      text: string,
+      values?: unknown[],
+    ): Promise<{ rows: T[]; rowCount: number }> {
       // Route to appropriate mock response based on query keywords
       if (text.includes("audit_events")) {
         const r = responses.get("audit_events") ?? { rows: [{ n: 0 }] };
-        return { rows: r.rows, rowCount: r.rows.length };
+        return { rows: r.rows as T[], rowCount: r.rows.length };
       }
       if (text.includes("sunday_batch_reports")) {
         const r = responses.get("sunday_batch_reports") ?? { rows: [] };
-        return { rows: r.rows, rowCount: r.rows.length };
+        return { rows: r.rows as T[], rowCount: r.rows.length };
       }
       if (text.includes("posts") && text.includes("scheduled")) {
         const r = responses.get("posts_scheduled") ?? { rows: [{ n: 0 }] };
-        return { rows: r.rows, rowCount: r.rows.length };
+        return { rows: r.rows as T[], rowCount: r.rows.length };
       }
       if (text.includes("INSERT INTO alerts")) {
         const kind = (values as string[])[0];
         const detail = (values as string[])[1];
         insertedAlerts.push({ kind, detail });
-        return { rows: [], rowCount: 1 };
+        return { rows: [] as T[], rowCount: 1 };
       }
-      return { rows: [], rowCount: 0 };
+      return { rows: [] as T[], rowCount: 0 };
     },
   };
 }
@@ -145,20 +148,23 @@ describe("checkWeeklyInvariants — low_approve_rate", () => {
     const insertedAlerts: { kind: string; detail: string }[] = [];
     const db: DbLike & { insertedAlerts: typeof insertedAlerts } = {
       insertedAlerts,
-      async query(text: string, values?: unknown[]) {
+      async query<T extends Record<string, unknown>>(
+        text: string,
+        values?: unknown[],
+      ): Promise<{ rows: T[]; rowCount: number }> {
         if (text.includes("sunday_batch_reports")) {
           throw new Error("relation does not exist");
         }
         if (text.includes("audit_events")) {
-          return { rows: [{ n: 5 }], rowCount: 1 };
+          return { rows: [{ n: 5 }] as unknown as T[], rowCount: 1 };
         }
         if (text.includes("INSERT INTO alerts")) {
           const kind = (values as string[])[0];
           const detail = (values as string[])[1];
           insertedAlerts.push({ kind, detail });
-          return { rows: [], rowCount: 1 };
+          return { rows: [] as T[], rowCount: 1 };
         }
-        return { rows: [{ n: 0 }], rowCount: 1 };
+        return { rows: [{ n: 0 }] as unknown as T[], rowCount: 1 };
       },
     };
     const results = await checkWeeklyInvariants({ now: NOW, db });

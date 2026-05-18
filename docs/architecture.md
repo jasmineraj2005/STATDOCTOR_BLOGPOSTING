@@ -146,7 +146,7 @@ Defence-in-depth so the system survives months unattended.
 | `callout_quota` | `≥ callout_floors[content_type]` callouts in body | guide=4, news=3, company=3 |
 | `comparison_table` | At least one markdown table | **`warn` only — bug B6, should be `fail` for guides per blog spec** |
 | `schema` | `faq_json_ld.@type='FAQPage'` AND `mainEntity.length >= 4` | **B5: spec says 8 for guides, 6 for news** |
-| `word_count` | Within `word_floors[content_type]` to `word_ceilings[content_type]` | news 1500-2000, guide 1500-2500, company 1000-1800 |
+| `word_count` | Within `word_floors[content_type]` to `word_ceilings[content_type]` | news 1000-1500, guide 1500-2500, company 1000-1800 |
 | `sources` | ≥3 distinct publishers AND ≥1 authoritative | URL whitelist tier ∈ {gov-au, gov-nz, peer-reviewed, professional-body} |
 
 ### Pillars + content types
@@ -185,13 +185,14 @@ Adding a domain: edit `data/url-whitelist.json`, open PR (don't push to main), `
 
 ---
 
-## 8 — Image sources (3-tier fallback)
+## 8 — Image sources (2-tier — credited publisher imagery only)
 
-Researcher attempts in order; first non-null wins; otherwise `image_url = null` (better no image than a fake one).
+Researcher attempts in order; first non-null wins; otherwise `image_url = null` (better no image than a loosely-topical match).
 
 1. **Guardian Content API** — direct CDN thumbnail (`i.guim.co.uk`) + Guardian byline.
 2. **OG-scrape** of any non-Guardian source URL — pulls `og:image` / `twitter:image` meta tags. Blocks Unsplash, quickchart, plain SVGs.
-3. **Wikimedia Commons** — keyword search filtered to CC-BY / CC0 / public-domain licences only, with proper artist attribution.
+
+**Wikimedia Commons fallback removed 2026-05-18.** Wikimedia returned loosely-topical CC-licensed images that often misrepresented the source — even with attribution, the visual mismatch hurt editorial trust. We now ship without an image when neither Tier 1 nor Tier 2 produces one (validators don't require an image; the rendered article degrades gracefully).
 
 `Source` model fields: `image_url`, `image_credit_publisher`, `image_credit_author`, `image_alt`.
 
@@ -201,8 +202,10 @@ Researcher attempts in order; first non-null wins; otherwise `image_url = null` 
 
 ```
 STATDOCTOR_BLOGPOSTING/
-├── architecture.md                    ← this file
-├── bugs.md                            ← open issue list
+├── docs/
+│   ├── architecture.md                ← this file
+│   ├── bugs.md                        ← open issue list
+│   └── plan.md                        ← active launch plan
 │
 ├── backend/                           Python pipeline (runs in GH Actions)
 │   ├── main.py                        entry point
@@ -212,7 +215,7 @@ STATDOCTOR_BLOGPOSTING/
 │   ├── config.py                      env loading
 │   ├── agents/
 │   │   ├── intelligence.py            topic selection, 40/40/20 dispatcher
-│   │   ├── researcher.py              Guardian + OG-scrape + Wikimedia fallback
+│   │   ├── researcher.py              Guardian + OG-scrape (Wikimedia removed)
 │   │   ├── writer.py                  GPT-4o body, outline → draft, expansion retry
 │   │   ├── seo.py                     per-pillar title cadence + meta + JSON-LD
 │   │   ├── ahpra.py                   regex + GPT scan + auto-injected disclaimers
@@ -279,7 +282,7 @@ STATDOCTOR_BLOGPOSTING/
 │   │       └── aggregate.ts           SEO dashboard pages
 │   │
 │   ├── e2e/                           Playwright — admin-flow, sunday-* specs, validator-gate, axe-core a11y, canary, banner-state
-│   └── playwright.config.ts
+│   └── (playwright removed 2026-05-18 — vitest + verify-*.sh cover the safety net)
 │
 └── .github/
     ├── actions/recover-and-alert/     Layer B composite action
@@ -293,7 +296,7 @@ STATDOCTOR_BLOGPOSTING/
         ├── cron-canary.yml
         ├── cron-sunday-batch-report.yml
         ├── cron-sunday-reminder.yml
-        └── ci.yml                     vitest + playwright + pytest gating
+        └── ci.yml                     vitest + pytest gating (playwright removed)
 ```
 
 ---
@@ -351,6 +354,7 @@ pipeline_runs                         -- Layer A every-agent-run row (run_id, ag
 | `RESEARCHER_BUDGET_TOKENS` | default 50000 (~$0.50/topic abort threshold) | optional |
 | `NEXT_PUBLIC_SITE_URL` | `https://blog.statdoctor.app` | optional |
 | `AUTO_PUBLISH_NEWS_HOURS` | default 48 — pending news auto-publish window | optional (logic not built yet — bug A1) |
+| `HEALTH_EXPECTED_FAILING_CRONS` | CSV of cron `kind`s whose recent failures should NOT downgrade `/api/health` (e.g. `seo-snapshot` while GSC SA propagation pending — bugs.md O2) | optional |
 
 ### GitHub repo secrets (Actions)
 `OPENAI_API_KEY`, `GUARDIAN_API_KEY`, `UNSPLASH_ACCESS_KEY`, `NEWSAPI_KEY`, `INGEST_URL`, `INGEST_TOKEN`, `CRON_BASE_URL`, `CRON_SECRET`, `ALERT_INGEST_TOKEN`, `TEST_POSTGRES_URL`, `TEST_ADMIN_TOKEN`.

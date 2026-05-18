@@ -317,8 +317,8 @@ class TestWriterPromptFloor:
 
     @patch("agents.writer.client.chat.completions.create")
     def test_writer_prompt_contains_floor_for_news(self, mock_create):
-        """Prompt for a news-pillar topic must mention 1500 (the news floor)."""
-        full_content = _minimal_markdown(word_target=1600)
+        """Prompt for a news-pillar topic must mention 1000 (M5b news floor)."""
+        full_content = _minimal_markdown(word_target=1100)
         mock_create.side_effect = [
             _make_mock_response(_outline_content()),
             _make_mock_response(full_content),
@@ -330,8 +330,8 @@ class TestWriterPromptFloor:
         assert mock_create.call_count >= 2
         draft_messages = mock_create.call_args_list[-1][1]["messages"]
         combined = " ".join(m["content"] for m in draft_messages)
-        assert "1500" in combined, (
-            "Expected the word floor '1500' for content_type=news to appear in the draft prompt"
+        assert "1000" in combined, (
+            "Expected the word floor '1000' for content_type=news to appear in the draft prompt"
         )
 
     @patch("agents.writer.client.chat.completions.create")
@@ -404,6 +404,82 @@ class TestWriterPromptFloor:
             "Expected sentinel floor '9999' to appear in prompt — "
             "this fails if floors are hardcoded in Python rather than loaded from JSON"
         )
+
+
+# ── M15: AHPRA coach-and-scan — prohibited-content block is in the draft prompt
+#
+# Pre-M15 the writer learned the regex-form banned phrases (from validators.json
+# via the M3 refactor) but NOT the broader AHPRA prohibited categories
+# (testimonials, comparative superiority, unsubstantiated claims, guaranteed
+# outcomes, unrealistic expectations, practitioner superlatives). The AHPRA
+# agent was scan-only and re-flagged after generation. M15 lifts the AHPRA
+# scanner's "Key prohibited content" block into the writer prompt so violations
+# are deterred at generation cost (1 LLM call) rather than detection +
+# heal-regen cost (3-4 calls).
+
+
+class TestWriterPromptAHPRACoachAndScan:
+    """M15 — writer prompt embeds AHPRA prohibited-content guidance upfront."""
+
+    AHPRA_SIGNALS: list[str] = [
+        "Testimonials or endorsements from patients",
+        "Comparative advertising",
+        "Unsubstantiated claims",
+        "Guaranteed results",
+        "unrealistic expectations",
+        "Superlatives about practitioners",
+    ]
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_writer_draft_prompt_contains_ahpra_prohibited_content_block(self, mock_create):
+        """Every AHPRA category signal must appear in the draft prompt."""
+        full_content = _minimal_markdown(word_target=1600)
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(full_content),
+        ]
+        write_post(_make_research(topic=_make_topic()))
+
+        assert mock_create.call_count >= 2
+        draft_messages = mock_create.call_args_list[-1][1]["messages"]
+        combined = " ".join(m["content"] for m in draft_messages)
+
+        missing = [s for s in self.AHPRA_SIGNALS if s not in combined]
+        assert not missing, (
+            "Writer draft prompt is missing AHPRA prohibited-content signals — "
+            "coach-and-scan (M15) is broken:\n"
+            + "\n".join(f"  - {s}" for s in missing)
+        )
+
+    def test_writer_imports_ahpra_prohibited_constant_for_single_source_of_truth(self):
+        """Writer must import the constant from ahpra.py, not duplicate the text.
+
+        Single source of truth: when the AHPRA scanner's prohibited list changes,
+        the writer prompt must change with it. Importing the constant enforces this.
+        """
+        from pathlib import Path
+        writer_src = (
+            Path(__file__).resolve().parents[1] / "agents" / "writer.py"
+        ).read_text()
+        assert "AHPRA_PROHIBITED_CONTENT_BLOCK" in writer_src, (
+            "writer.py must import AHPRA_PROHIBITED_CONTENT_BLOCK from agents.ahpra "
+            "so the prohibited list stays in lock-step with the scanner prompt."
+        )
+
+    def test_ahpra_module_exposes_prohibited_content_constant(self):
+        """The AHPRA module must export the constant for cross-agent reuse."""
+        from agents import ahpra as ahpra_mod
+        assert hasattr(ahpra_mod, "AHPRA_PROHIBITED_CONTENT_BLOCK"), (
+            "agents.ahpra must define AHPRA_PROHIBITED_CONTENT_BLOCK at module level "
+            "(M15 requires the writer to import it)."
+        )
+        block = ahpra_mod.AHPRA_PROHIBITED_CONTENT_BLOCK
+        assert isinstance(block, str) and len(block) > 100, (
+            "AHPRA_PROHIBITED_CONTENT_BLOCK should be a substantive string "
+            "containing the 6 prohibition categories."
+        )
+        for signal in TestWriterPromptAHPRACoachAndScan.AHPRA_SIGNALS:
+            assert signal in block, f"constant missing signal {signal!r}"
 
 
 # ── M2.T2: two-pass outline → draft ──────────────────────────────────────────

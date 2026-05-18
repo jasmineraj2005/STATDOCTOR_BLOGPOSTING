@@ -76,8 +76,12 @@ def run_pipeline() -> FinalPost:
     seo = generate_seo(post, topic, content_type=content_type, image_url=research.image_url)
     _check(run_id, "seo", validate_seo(seo))
 
-    # Agent 6: AHPRA — compliance check, auto-fix, flag issues
-    cleaned_content, ahpra_flags, ahpra_passed = check_ahpra(post.content_markdown)
+    # Agent 6: AHPRA — compliance check, auto-fix, flag issues.
+    # Pass sources so unsupported_stat flags can auto-resolve when the citation
+    # is right next to the stat in the markdown (M5 / B4).
+    cleaned_content, ahpra_flags, ahpra_passed = check_ahpra(
+        post.content_markdown, sources=research.sources
+    )
     _check(run_id, "ahpra", validate_ahpra(cleaned_content))
 
     now = datetime.utcnow()

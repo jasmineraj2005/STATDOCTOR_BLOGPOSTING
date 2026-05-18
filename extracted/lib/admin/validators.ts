@@ -25,6 +25,7 @@ type ValidatorsConfig = {
   editorially_banned: { pattern: string; reason: string }[];
   bad_anchor_patterns: string[];
   callout_floors: Record<ContentType, number>;
+  faq_floors: Record<ContentType, number>;
   word_floors: Record<ContentType, number>;
   word_ceilings: Record<ContentType, number>;
   pay_disclaimer_triggers: string[];
@@ -89,18 +90,36 @@ function findSourceStyleAnchors(md: string): string[] {
 export function runValidators(post: Post): ValidationResult[] {
   const results: ValidationResult[] = [];
 
-  // AHPRA scan flags from the Python agent.
-  const reviewFlags = post.ahpra_flags.filter((f) => f.requires_human_review);
+  // AHPRA scan flags from the Python agent (M16: severity-aware gate).
+  //   - severity="error" blocks ACCEPT
+  //   - severity="warn" surfaces yellow, doesn't block
+  //   - severity="info" auto-fixed, doesn't block
+  //   - missing severity (legacy rows) falls back to requires_human_review
+  const errorFlags = post.ahpra_flags.filter((f) =>
+    f.severity ? f.severity === "error" : f.requires_human_review,
+  );
+  const warnFlags = post.ahpra_flags.filter((f) => f.severity === "warn");
+  let ahpraStatus: ValidationStatus;
+  let ahpraDetail: string;
+  if (!post.ahpra_passed || errorFlags.length > 0) {
+    ahpraStatus = "fail";
+    ahpraDetail = errorFlags.length
+      ? `${errorFlags.length} blocking flag(s): ${errorFlags.map((f) => f.flag_type).join(", ")}.`
+      : "AHPRA scan didn't pass.";
+  } else if (warnFlags.length > 0) {
+    ahpraStatus = "warn";
+    ahpraDetail = `${warnFlags.length} non-blocking concern(s): ${warnFlags
+      .map((f) => f.flag_type)
+      .join(", ")}.`;
+  } else {
+    ahpraStatus = "pass";
+    ahpraDetail = "Passed AHPRA scan; no flags require human review.";
+  }
   results.push({
     check: "ahpra",
     label: "AHPRA compliance",
-    status: post.ahpra_passed && reviewFlags.length === 0 ? "pass" : "fail",
-    detail:
-      reviewFlags.length === 0
-        ? "Passed AHPRA scan; no flags require human review."
-        : `${reviewFlags.length} flag(s) need review: ${reviewFlags
-            .map((f) => f.flag_type)
-            .join(", ")}.`,
+    status: ahpraStatus,
+    detail: ahpraDetail,
   });
 
   // Live regex over current markdown — catches edits that re-introduced banned terms.
@@ -145,27 +164,31 @@ export function runValidators(post: Post): ValidationResult[] {
   });
 
   const hasTable = hasMarkdownTable(post.content_markdown);
+  const tableRequired = post.content_type === "guide";
   results.push({
     check: "comparison_table",
     label: "Comparison table",
-    status: hasTable ? "pass" : "warn",
+    status: hasTable ? "pass" : tableRequired ? "fail" : "warn",
     detail: hasTable
       ? "Markdown table present."
-      : "No markdown table found — recommended for guides.",
+      : tableRequired
+        ? "No markdown table found — required for guides."
+        : "No markdown table found — recommended.",
   });
 
   const faq = post.faq_json_ld as { "@type"?: string; mainEntity?: unknown[] };
-  const faqOk =
-    faq?.["@type"] === "FAQPage" &&
-    Array.isArray(faq.mainEntity) &&
-    faq.mainEntity.length >= 4;
+  const faqFloor = cfg.faq_floors[post.content_type] ?? 4;
+  const faqCount = Array.isArray(faq?.mainEntity) ? faq.mainEntity.length : 0;
+  const faqOk = faq?.["@type"] === "FAQPage" && faqCount >= faqFloor;
   results.push({
     check: "schema",
     label: "Schema shape",
     status: faqOk ? "pass" : "fail",
     detail: faqOk
-      ? "FAQPage has ≥4 questions; MedicalScholarlyArticle is rendered by the website."
-      : "FAQPage missing or has fewer than 4 mainEntity questions.",
+      ? `FAQPage has ${faqCount} questions (floor for ${post.content_type}: ${faqFloor}); MedicalScholarlyArticle is rendered by the website.`
+      : faq?.["@type"] !== "FAQPage"
+        ? "FAQPage @type missing or wrong."
+        : `FAQPage has ${faqCount} questions — floor for ${post.content_type} is ${faqFloor}.`,
   });
 
   const floor = cfg.word_floors[post.content_type] ?? 1500;

@@ -93,6 +93,7 @@ export async function getAllPosts(): Promise<PostFile[]> {
              generated_at, date_modified, last_reviewed_at, data
         FROM posts
         WHERE slug NOT LIKE ${CANARY_PREFIX + "%"}
+          AND deleted_at IS NULL
         ORDER BY generated_at DESC
     `;
     return rows.map(rowToFile);
@@ -108,6 +109,7 @@ export async function getPendingPosts(): Promise<PostFile[]> {
         FROM posts
         WHERE status = 'pending_review'
           AND slug NOT LIKE ${CANARY_PREFIX + "%"}
+          AND deleted_at IS NULL
         ORDER BY generated_at DESC
     `;
     return rows.map(rowToFile);
@@ -124,16 +126,150 @@ export async function deletePostBySlug(slug: string): Promise<boolean> {
   return rowCount > 0;
 }
 
+/**
+ * Soft-delete a post. Sets ``deleted_at = NOW()`` so queue views hide the row
+ * but the data + audit trail survive. Reversible via ``restorePostBySlug``.
+ * Convention 4 (no hard deletes) — see docs/architecture.md §12.
+ */
+export async function softDeletePostBySlug(slug: string): Promise<boolean> {
+  if (!isDbConfigured()) {
+    throw new Error("softDeletePostBySlug requires DB; cannot run in fs-only mode");
+  }
+  const { rowCount } = await sql`
+    UPDATE posts SET deleted_at = NOW()
+     WHERE slug = ${slug} AND deleted_at IS NULL
+  `;
+  return rowCount > 0;
+}
+
+/** Restore a soft-deleted post (clear ``deleted_at``). */
+export async function restorePostBySlug(slug: string): Promise<boolean> {
+  if (!isDbConfigured()) {
+    throw new Error("restorePostBySlug requires DB; cannot run in fs-only mode");
+  }
+  const { rowCount } = await sql`
+    UPDATE posts SET deleted_at = NULL
+     WHERE slug = ${slug} AND deleted_at IS NOT NULL
+  `;
+  return rowCount > 0;
+}
+
 export async function getPostBySlug(slug: string): Promise<PostFile | null> {
   if (isDbConfigured()) {
     const { rows } = await sql<Row>`
       SELECT slug, filename, status, pillar, content_type, word_count, ahpra_passed,
              generated_at, date_modified, last_reviewed_at, data
         FROM posts WHERE slug = ${slug}
+          AND deleted_at IS NULL
     `;
     return rows.length ? rowToFile(rows[0]) : null;
   }
   return fsGetBySlug(slug);
+}
+
+/**
+ * Return posts that have been soft-deleted in the last ``limitDays`` days
+ * (default 30). Newest deletion first. Used by the queue page's "Deleted"
+ * section so a CEO can spot a mis-rejection and restore it within a window.
+ *
+ * In FS-only mode this is a no-op (deleted_at lives in the DB).
+ */
+export async function getDeletedPosts(limitDays: number = 30): Promise<PostFile[]> {
+  if (!isDbConfigured()) return [];
+  // pg-mem can't bind interval values inline; we compute the cutoff in JS and pass it.
+  const cutoff = new Date(Date.now() - limitDays * 24 * 3600_000).toISOString();
+  const { rows } = await sql<Row & { deleted_at: Date | string }>`
+    SELECT slug, filename, status, pillar, content_type, word_count, ahpra_passed,
+           generated_at, date_modified, last_reviewed_at, data
+      FROM posts
+      WHERE deleted_at IS NOT NULL
+        AND deleted_at >= ${cutoff}
+        AND slug NOT LIKE ${CANARY_PREFIX + "%"}
+      ORDER BY deleted_at DESC
+  `;
+  return rows.map(rowToFile);
+}
+
+/**
+ * Fetch by slug INCLUDING soft-deleted posts. Used by the restore endpoint
+ * (which needs to find the row precisely *because* it's deleted) and by
+ * canary cleanup. Production callers should prefer ``getPostBySlug``.
+ */
+export async function getPostBySlugIncludingDeleted(slug: string): Promise<PostFile | null> {
+  if (!isDbConfigured()) {
+    return fsGetBySlug(slug);
+  }
+  const { rows } = await sql<Row>`
+    SELECT slug, filename, status, pillar, content_type, word_count, ahpra_passed,
+           generated_at, date_modified, last_reviewed_at, data
+      FROM posts WHERE slug = ${slug}
+  `;
+  return rows.length ? rowToFile(rows[0]) : null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Post revisions (M9 — every edit snapshots the pre-edit state)
+// ──────────────────────────────────────────────────────────────────────────────
+
+export type PostRevision = {
+  id: number;
+  slug: string;
+  data: Post;
+  edited_at: string;
+  edited_by: string | null;
+  reason: string | null;
+};
+
+/**
+ * Append a snapshot of ``post`` to the ``post_revisions`` table.
+ *
+ * Call this immediately *before* applying an edit so the pre-edit state is
+ * captured. Idempotent in the sense that each call inserts a new row — the
+ * caller is responsible for not double-calling for a single edit.
+ *
+ * In FS-only mode this is a no-op (revisions require Postgres).
+ */
+export async function addPostRevision(
+  slug: string,
+  post: Post,
+  opts: { editedBy?: string | null; reason?: string | null } = {},
+): Promise<void> {
+  if (!isDbConfigured()) return;
+  const data = JSON.stringify(post);
+  await sql`
+    INSERT INTO post_revisions (slug, data, edited_by, reason)
+    VALUES (${slug}, ${data}::jsonb, ${opts.editedBy ?? null}, ${opts.reason ?? null})
+  `;
+}
+
+/** Return revisions for ``slug`` newest-first. Empty list if none / FS-only mode. */
+export async function getPostRevisions(slug: string): Promise<PostRevision[]> {
+  if (!isDbConfigured()) return [];
+  type RevisionRow = {
+    id: number;
+    slug: string;
+    data: Post;
+    edited_at: Date | string;
+    edited_by: string | null;
+    reason: string | null;
+  };
+  const { rows } = await sql<RevisionRow>`
+    SELECT id, slug, data, edited_at, edited_by, reason
+      FROM post_revisions
+      WHERE slug = ${slug}
+      ORDER BY edited_at DESC
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    data: r.data,
+    edited_at:
+      typeof r.edited_at === "string"
+        ? r.edited_at
+        : r.edited_at.toISOString(),
+    edited_by: r.edited_by,
+    reason: r.reason,
+  }));
 }
 
 /**
