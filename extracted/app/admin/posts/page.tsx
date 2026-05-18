@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import ShaderBackground from "@/components/shader-background";
 import { Banner } from "@/components/admin/banner";
 import { isAuthorised } from "@/lib/admin/auth";
-import { getAllPosts, getPendingPosts } from "@/lib/admin/store";
+import { getAllPosts, getDeletedPosts, getPendingPosts } from "@/lib/admin/store";
 import { computeBannerState, type BannerState } from "@/lib/admin/banner";
 import { isDbConfigured, pool } from "@/lib/admin/db";
 import { runValidators, isApprovable } from "@/lib/admin/validators";
@@ -45,9 +45,10 @@ const TYPE_CHIP: React.CSSProperties = {
 export default async function PostsQueue() {
   if (!(await isAuthorised())) redirect("/login");
 
-  const [pending, all, bannerState] = await Promise.all([
+  const [pending, all, deleted, bannerState] = await Promise.all([
     getPendingPosts(),
     getAllPosts(),
+    getDeletedPosts(30),
     isDbConfigured()
       ? computeBannerState(
           {
@@ -181,6 +182,23 @@ export default async function PostsQueue() {
                   title={f.post.title}
                   slug={f.post.slug}
                   meta={f.post.rejection_history?.[f.post.rejection_history.length - 1]?.code ?? "—"}
+                />
+              ))}
+            </FoldSection>
+          )}
+
+          {deleted.length > 0 && (
+            <FoldSection
+              title={`Deleted, last 30 days (${deleted.length}) — restorable`}
+            >
+              {deleted.map((f) => (
+                <DeletedRow
+                  key={f.filename}
+                  title={f.post.title}
+                  slug={f.post.slug}
+                  rejectionCode={
+                    f.post.rejection_history?.[f.post.rejection_history.length - 1]?.code ?? "—"
+                  }
                 />
               ))}
             </FoldSection>
@@ -323,6 +341,39 @@ function RowLite({
         {title}
       </Link>
       <span className="font-mono text-[10px] text-white/45">{meta}</span>
+    </li>
+  );
+}
+
+function DeletedRow({
+  title,
+  slug,
+  rejectionCode,
+}: {
+  title: string;
+  slug: string;
+  rejectionCode: string;
+}) {
+  return (
+    <li
+      className="flex items-center justify-between px-4 py-2.5 rounded-lg transition-colors hover:bg-white/[0.08]"
+      style={GLASS_ROW_LITE}
+    >
+      <div className="flex-1 min-w-0">
+        <span className="truncate text-white/60 italic">{title}</span>
+        <span className="ml-2 font-mono text-[10px] text-white/35">
+          dismissed · {rejectionCode}
+        </span>
+      </div>
+      <form action={`/api/posts/${slug}/restore`} method="POST">
+        <button
+          type="submit"
+          className="px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-white/85 font-mono text-[10px] tracking-widest hover:bg-violet-500/30 hover:border-violet-400/40 transition-colors"
+          title="Restore: clear deleted_at so the post returns to the queue at its previous status."
+        >
+          RESTORE
+        </button>
+      </form>
     </li>
   );
 }

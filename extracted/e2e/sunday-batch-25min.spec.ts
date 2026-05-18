@@ -197,4 +197,48 @@ test.describe("Sunday batch review (25-minute SLA)", () => {
       timeout: 10_000,
     });
   });
+
+  test("article_detail_page_has_top_jump_links_and_below_fold_validator_panel", async ({
+    page,
+    context,
+    request,
+  }) => {
+    // M7 / M8: Given a seeded green article, when the CEO opens its detail page,
+    // then they see jump-link chips at the top AND the validator panel rendered
+    // below the article preview (not in a sidebar).
+    const slug = `sunday-layout-${Date.now()}`;
+    await setAdminCookie(context);
+    await seedArticle(request, slug, 0);
+
+    await page.goto(`/admin/posts/${slug}`);
+
+    // Jump-link nav must be present with at least the Validators and Reject chips.
+    const validatorsChip = page.getByRole("link", { name: /Validators/i });
+    const rejectChip = page.getByRole("link", { name: /^Reject$/i });
+    await expect(validatorsChip).toBeVisible();
+    await expect(rejectChip).toBeVisible();
+
+    // The validator panel itself must render below the article preview (i.e.,
+    // its anchor target #validators exists and is reachable).
+    const validatorsAnchor = page.locator("#validators");
+    await expect(validatorsAnchor).toBeAttached();
+
+    // The preview pane must still be the first major section above the fold.
+    const previewPane = page.locator('[data-testid="article-preview-pane"]');
+    await expect(previewPane).toBeVisible();
+
+    // Article preview must come BEFORE the validator panel in document order
+    // (validates the layout reorganisation done in M8).
+    const previewBox = await previewPane.boundingBox();
+    const validatorsBox = await validatorsAnchor.boundingBox();
+    expect(previewBox, "preview pane must render").not.toBeNull();
+    expect(validatorsBox, "validators anchor must render").not.toBeNull();
+    if (previewBox && validatorsBox) {
+      expect(validatorsBox.y).toBeGreaterThan(previewBox.y);
+    }
+
+    // Clicking the Validators jump link must scroll the panel into view.
+    await validatorsChip.click();
+    await expect(validatorsAnchor).toBeInViewport({ ratio: 0.1 });
+  });
 });
