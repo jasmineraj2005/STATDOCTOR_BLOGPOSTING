@@ -4,7 +4,7 @@ CEO clicks the "Heal" button on /admin/posts/[slug]; the Vercel function
 fires this script via workflow_dispatch on `.github/workflows/heal.yml`.
 
 Flow:
-  1. GET /api/admin/posts/[slug] from the dashboard (needs INGEST_TOKEN or CRON_BASE_URL + admin auth)
+  1. GET /api/posts/[slug]/heal-data from the dashboard (needs INGEST_TOKEN; uses CRON_BASE_URL)
   2. Read validation_failures payload from the dashboard's runValidators check
   3. For each red validator, build a fix instruction and call writer.regenerate
   4. POST patched post back via /api/admin/ingest
@@ -71,7 +71,7 @@ def fetch_post(slug: str) -> dict[str, Any]:
         raise SystemExit("CRON_BASE_URL not set; can't fetch post")
     if not HEAL_TOKEN:
         raise SystemExit("INGEST_TOKEN not set; can't authenticate")
-    url = f"{CRON_BASE_URL.rstrip('/')}/api/admin/posts/{slug}/heal-data"
+    url = f"{CRON_BASE_URL.rstrip('/')}/api/posts/{slug}/heal-data"
     headers = {"Authorization": f"Bearer {HEAL_TOKEN}"}
     data = _http_get_json(url, headers=headers)
     if not data or not data.get("post"):
