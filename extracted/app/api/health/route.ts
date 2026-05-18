@@ -12,6 +12,22 @@ const CRON_STALENESS_HOURS: Record<string, number> = {
   "daily-digest": 26, // daily expected
 };
 
+/**
+ * Crons we expect to fail for known external reasons (e.g. seo-snapshot fails
+ * daily until the GSC service account propagates in Google's directory — see
+ * docs/bugs.md O2 / docs/plan.md M25). Surfaced in the checks object so the
+ * issue stays visible, but does NOT downgrade overall status.
+ *
+ * Operator-configurable via comma-separated env: HEALTH_EXPECTED_FAILING_CRONS.
+ * Clear the env var (or remove the cron from it) once the upstream issue is
+ * resolved so the health endpoint goes back to enforcing freshness.
+ */
+function expectedFailingCrons(): Set<string> {
+  const raw = (process.env.HEALTH_EXPECTED_FAILING_CRONS ?? "").trim();
+  if (!raw) return new Set();
+  return new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
+}
+
 type Status = "healthy" | "degraded" | "failing";
 
 /**
@@ -49,7 +65,9 @@ export async function GET() {
   }
 
   // Cron freshness — any cron that ran but is now stale, OR has more recent
-  // fails than oks, downgrades health.
+  // fails than oks, downgrades health unless the cron is in the
+  // HEALTH_EXPECTED_FAILING_CRONS allowlist.
+  const tolerated = expectedFailingCrons();
   try {
     type CronRow = {
       kind: string;
@@ -64,12 +82,17 @@ export async function GET() {
       const lastOk = r.last_ok ? new Date(r.last_ok).getTime() : 0;
       const lastFail = r.last_fail ? new Date(r.last_fail).getTime() : 0;
       const ageH = (Date.now() - lastOk) / 3600_000;
+      const isTolerated = tolerated.has(r.kind);
       if (lastFail > lastOk) {
-        checks[`cron:${r.kind}`] = "last_run_failed";
-        status = "degraded";
+        checks[`cron:${r.kind}`] = isTolerated
+          ? "last_run_failed_tolerated"
+          : "last_run_failed";
+        if (!isTolerated) status = "degraded";
       } else if (lastOk && ageH > maxAgeH) {
-        checks[`cron:${r.kind}`] = `stale_${Math.round(ageH)}h`;
-        status = "degraded";
+        checks[`cron:${r.kind}`] = isTolerated
+          ? `stale_${Math.round(ageH)}h_tolerated`
+          : `stale_${Math.round(ageH)}h`;
+        if (!isTolerated) status = "degraded";
       } else {
         checks[`cron:${r.kind}`] = "ok";
       }
