@@ -28,8 +28,14 @@ export default defineConfig({
   ],
   webServer: {
     // Use port 3100 so we don't collide with whatever the user has on :3000.
+    //
+    // POSTGRES_URL: CI sets this in the job env (matches the postgres service
+    // container creds); locally fall back to the passwordless $USER pattern.
+    // ADMIN_TOKEN: CI sets this in the job env; locally let .env.local provide
+    // it (or fall through to the permissive isAuthorised gate when unset).
     command:
-      "POSTGRES_URL=postgresql://$USER@localhost:5432/statdoctor_admin_playwright " +
+      `POSTGRES_URL=${process.env.POSTGRES_URL ?? "postgresql://$USER@localhost:5432/statdoctor_admin_playwright"} ` +
+      `${process.env.ADMIN_TOKEN ? `ADMIN_TOKEN=${process.env.ADMIN_TOKEN} ` : ""}` +
       "INGEST_TOKEN=playwright-ingest " +
       "CRON_SECRET=playwright-cron " +
       "WEBSITE_POSTS_DIR=/tmp/sd-playwright-publish " +

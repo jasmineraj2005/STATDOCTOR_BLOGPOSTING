@@ -30,14 +30,20 @@ const WCAG_22_AA_TAGS = ["wcag2a", "wcag2aa", "wcag22aa"] as const;
 /**
  * Format a single axe violation for console output.
  * Keeps the log actionable without being overwhelming.
+ *
+ * The signature accepts the structural subset we read; axe-core's full
+ * Result type is a superset (impact is the literal union 'minor' | 'moderate'
+ * | 'serious' | 'critical', plus extra fields we don't need).
  */
-function formatViolation(v: {
+type AxeViolation = {
   id: string;
-  impact: string | null | undefined;
+  impact?: string | null;
   description: string;
   helpUrl: string;
-  nodes: Array<{ html: string }>;
-}): string {
+  nodes: ReadonlyArray<{ html: string }>;
+};
+
+function formatViolation(v: AxeViolation): string {
   const nodeSnippet = v.nodes
     .slice(0, 2)
     .map((n) => n.html.slice(0, 120))

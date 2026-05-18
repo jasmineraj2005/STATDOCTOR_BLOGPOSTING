@@ -8,15 +8,26 @@
 import { Client } from "pg";
 import type { BrowserContext } from "@playwright/test";
 
-export const POSTGRES_URL = `postgresql://${process.env.USER}@localhost:5432/statdoctor_admin_playwright`;
+/**
+ * Postgres connection for Playwright tests.
+ *
+ * - In CI the workflow sets POSTGRES_URL=postgresql://postgres:postgres@... so
+ *   tests connect with credentials matching the postgres service container.
+ * - In local dev there's typically no auth on the laptop's Postgres, so we
+ *   build a passwordless URL from $USER.
+ */
+export const POSTGRES_URL =
+  process.env.POSTGRES_URL ??
+  `postgresql://${process.env.USER}@localhost:5432/statdoctor_admin_playwright`;
 
 /**
- * The ADMIN_TOKEN value set in extracted/.env.local.
- * isAuthorised() (lib/admin/auth.ts) compares the `admin_token` cookie to this.
- * If ADMIN_TOKEN env is unset the gate is permissive; with it set we must supply
- * the cookie so admin pages render rather than redirect to /login.
+ * The ADMIN_TOKEN value that isAuthorised() (lib/admin/auth.ts) compares the
+ * `admin_token` cookie against. Must match whatever the dev server was booted
+ * with — in CI that's whatever the workflow env block sets, locally it's the
+ * value in extracted/.env.local. Reading from env keeps the two in lock-step.
  */
-export const ADMIN_TOKEN = "local-dev-statdoctor-blog-2026";
+export const ADMIN_TOKEN =
+  process.env.ADMIN_TOKEN ?? "local-dev-statdoctor-blog-2026";
 
 /**
  * Inject the admin_token cookie into a browser context so admin pages pass
