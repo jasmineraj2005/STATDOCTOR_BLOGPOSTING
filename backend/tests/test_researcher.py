@@ -304,13 +304,28 @@ _RESEARCH_RESPONSE_JSON = json.dumps({
         "$1850 average daily rate — AMA Survey (2023)",
     ],
     "ahpra_context": "Good Medical Practice requires verification of credentials.",
+    # M6 / Bug B7: fixtures must include ≥3 publishers (Guardian + 2 here)
+    # AND ≥1 authoritative source. The AHPRA + AIHW + RACGP additional sources
+    # below satisfy both gates.
     "additional_sources": [
         {
             "title": "AHPRA Annual Report 2023",
             "url": "https://www.ahpra.gov.au/annual-report-2023",
             "publisher": "AHPRA",
             "snippet": "Registrations increased by 5% in 2023.",
-        }
+        },
+        {
+            "title": "AIHW Health Workforce Snapshot",
+            "url": "https://www.aihw.gov.au/reports/workforce/snapshot",
+            "publisher": "AIHW",
+            "snippet": "Locum representation in the GP workforce rose to 12% in 2023.",
+        },
+        {
+            "title": "RACGP Standards Update",
+            "url": "https://www.racgp.org.au/standards-update-2024",
+            "publisher": "RACGP",
+            "snippet": "Updated locum credentialing pathway in 2024.",
+        },
     ],
 })
 
@@ -466,7 +481,8 @@ class TestResearchTopicSourceValidation:
         guardian_resp.raise_for_status.return_value = None
         mock_get.return_value = guardian_resp
 
-        # LLM adds one additional source (fake domain, will be dropped by validator)
+        # LLM adds one fake (validator drops it) + two authoritative
+        # publishers (so the M6 diversity gate is satisfied).
         llm_json = json.dumps({
             "key_facts": ["F1", "F2", "F3"],
             "statistics": [
@@ -480,7 +496,19 @@ class TestResearchTopicSourceValidation:
                     "url": "https://made-up.example.com/b",
                     "publisher": "Fake",
                     "snippet": "Irrelevant.",
-                }
+                },
+                {
+                    "title": "AHPRA Annual Report",
+                    "url": "https://www.ahpra.gov.au/annual-2024",
+                    "publisher": "AHPRA",
+                    "snippet": "AHPRA registration trends.",
+                },
+                {
+                    "title": "AIHW Workforce Data",
+                    "url": "https://www.aihw.gov.au/workforce/2024",
+                    "publisher": "AIHW",
+                    "snippet": "Locum representation increased to 12%.",
+                },
             ],
         })
         mock_create.return_value = MagicMock(
@@ -488,9 +516,15 @@ class TestResearchTopicSourceValidation:
             usage=MagicMock(total_tokens=1000),
         )
 
-        # Validator keeps only Guardian sources (drops the fake one)
+        # Validator keeps Guardian + the two authoritative additional sources
+        # (drops the "made-up.example.com" fake).
         def fake_validate(sources, *, http=None, sleeper=None):
-            kept = [s for s in sources if "theguardian.com" in s.get("url", "")]
+            kept = [
+                s for s in sources
+                if "theguardian.com" in s.get("url", "")
+                or "ahpra.gov.au" in s.get("url", "")
+                or "aihw.gov.au" in s.get("url", "")
+            ]
             return _make_ok_validation_result(kept)
 
         mock_validate.side_effect = fake_validate
@@ -538,7 +572,12 @@ class TestResearchTopicSourceValidation:
             "key_facts": ["F1", "F2"],
             "statistics": ["75% stat — AIHW (2023)", "$1850 rate — AMA (2023)"],
             "ahpra_context": "Context.",
-            "additional_sources": [],
+            # M6: provide authoritative publishers so the brief satisfies the
+            # diversity gate after re-broaden recovers ≥5 sources.
+            "additional_sources": [
+                {"title": "AHPRA", "url": "https://www.ahpra.gov.au/x", "publisher": "AHPRA", "snippet": ""},
+                {"title": "AIHW", "url": "https://www.aihw.gov.au/y", "publisher": "AIHW", "snippet": ""},
+            ],
         })
         mock_create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content=llm_json))],
@@ -720,7 +759,11 @@ class TestImageFetching:
         mock_create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content=json.dumps({
                 "key_facts": ["F1"], "statistics": [], "ahpra_context": "ctx",
-                "additional_sources": [],
+                # M6: authoritative publishers so diversity gate passes.
+                "additional_sources": [
+                    {"title": "AHPRA", "url": "https://www.ahpra.gov.au/x", "publisher": "AHPRA", "snippet": ""},
+                    {"title": "AIHW", "url": "https://www.aihw.gov.au/y", "publisher": "AIHW", "snippet": ""},
+                ],
             })))],
             usage=MagicMock(total_tokens=500),
         )
