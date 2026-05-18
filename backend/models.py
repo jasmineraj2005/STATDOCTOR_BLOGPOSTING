@@ -153,10 +153,25 @@ class SEOMetadata(BaseModel):
 
 
 class AHPRAFlag(BaseModel):
+    """A single AHPRA scanner finding.
+
+    ``severity`` (M16) drives the admin validator gate:
+      - ``"info"`` — auto-fixed (e.g. disclaimer auto-injected, stat auto-cited).
+        Surfaced for visibility but doesn't block ACCEPT.
+      - ``"warn"`` — quality concern needing manual review (unsupported_stat
+        without a nearby cite, missing_disclaimer that couldn't be injected).
+        Yellow in the UI; doesn't block ACCEPT.
+      - ``"error"`` — hard AHPRA prohibition (regex-caught forbidden_claim,
+        unknown flag types as a fail-safe). Blocks ACCEPT.
+
+    Default is ``"error"`` so any code path that forgets to set severity stays
+    fail-closed.
+    """
     flag_type: str  # "forbidden_claim" | "missing_disclaimer" | "unsupported_stat"
     excerpt: str
     fix_applied: str
     requires_human_review: bool
+    severity: Literal["info", "warn", "error"] = "error"
 
 
 class RejectionEntry(BaseModel):

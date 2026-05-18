@@ -24,11 +24,24 @@ export type RejectionCode =
 
 export type ContentType = "news" | "guide" | "company";
 
+/**
+ * M16: flag severity decides whether the admin validator gate fails.
+ *
+ *   "info"  — auto-fixed (disclaimer injected, stat auto-cited). Surfaced, doesn't block.
+ *   "warn"  — quality concern needing manual review. Yellow, doesn't block ACCEPT.
+ *   "error" — hard AHPRA prohibition. Red, blocks ACCEPT.
+ *
+ * Optional for back-compat with rows ingested before M16; the validator gate
+ * falls back to `requires_human_review` when severity is missing.
+ */
+export type AHPRASeverity = "info" | "warn" | "error";
+
 export type AHPRAFlag = {
   flag_type: string;
   excerpt: string;
   fix_applied: string;
   requires_human_review: boolean;
+  severity?: AHPRASeverity;
 };
 
 export type Source = {
