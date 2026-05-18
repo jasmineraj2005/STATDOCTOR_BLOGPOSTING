@@ -325,14 +325,8 @@ HEAL_HANDLERS = {
 
 ---
 
-### O4. Wikimedia fallback returns loosely-topical images
-**Where:** `backend/agents/researcher.py:_fetch_wikimedia_image`
-
-**Why it matters:** Search query is the source title (e.g., "AHPRA Registration"). Wikimedia returns a CC-licensed image MATCHING that text — could be a 1920s photo of a different "AHPRA" or unrelated medical content. No editorial relevance filter.
-
-**Fix:** Add a GPT "is this image visually relevant to the article topic?" pass on top-3 Wikimedia results. Cheap (`gpt-4o-mini` with image input).
-
-**Effort:** 45 min.
+### O4. ~~Wikimedia fallback returns loosely-topical images~~ — RESOLVED 2026-05-18 by removal
+**Status:** Wikimedia fallback removed entirely (CEO request — see `docs/plan.md` N4). Articles ship without an image when Guardian CDN + OG-scrape both fail, rather than risking a topical-mismatch attribution. Cleaner than a per-image relevance pass and avoids the LLM cost of the originally-planned fix.
 
 ---
 
