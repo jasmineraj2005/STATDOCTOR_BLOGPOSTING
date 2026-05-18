@@ -183,3 +183,30 @@ class TestHealEndToEnd:
         instruction = kwargs["extra_instruction"]
         assert "Remove every AHPRA-banned phrase" in instruction
         assert "1500 words" in instruction
+
+
+# ── fetch_post URL construction ───────────────────────────────────────────────
+
+
+class TestFetchPostURL:
+    """Regression: the heal-data route lives at /api/posts/<slug>/heal-data,
+    NOT /api/admin/posts/<slug>/heal-data. Earlier heal_agent built the
+    /admin/-prefixed URL and silently 404'd on every dispatch because the
+    end-to-end tests monkeypatched fetch_post itself, never exercising the
+    real URL string.
+    """
+
+    def test_fetch_post_uses_unprefixed_posts_route(self, monkeypatch):
+        captured: dict[str, str] = {}
+
+        def fake_get_json(url, headers=None):
+            captured["url"] = url
+            return {"post": {"slug": "abc"}, "validation_failures": [], "word_floor": 1500}
+
+        monkeypatch.setattr(heal_agent, "CRON_BASE_URL", "https://blog.statdoctor.app")
+        monkeypatch.setattr(heal_agent, "HEAL_TOKEN", "test-token")
+        monkeypatch.setattr(heal_agent, "_http_get_json", fake_get_json)
+
+        heal_agent.fetch_post("my-slug")
+
+        assert captured["url"] == "https://blog.statdoctor.app/api/posts/my-slug/heal-data"
