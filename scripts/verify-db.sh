@@ -22,6 +22,7 @@ mkdir -p /tmp/sd-publish-test
 rm -f /tmp/sd-publish-test/*.json 2>/dev/null || true
 : > /tmp/sd-dev.log
 POSTGRES_URL="${POSTGRES_URL}" INGEST_TOKEN="${INGEST_TOKEN}" WEBSITE_POSTS_DIR=/tmp/sd-publish-test \
+  ADMIN_TOKEN= \
   pnpm dev > /tmp/sd-dev.log 2>&1 &
 echo $! > /tmp/sd-dev.pid
 
@@ -50,7 +51,7 @@ cat > /tmp/sd-ingest.json <<'JSON'
     "meta_description": "A$1600/day test post for verifying the DB ingest path on the StatDoctor dashboard.",
     "focus_keyword": "locum work sydney",
     "og_image_alt": "Locum doctor at a Sydney public hospital ward — test scene.",
-    "content_markdown": "**TL;DR:** test\n\n## Background\n\n[AHPRA registration](https://www.ahpra.gov.au/) is the entry point.\n\n> [KEY FACTS] These figures are placeholders.\n\n> [INFO] Refer to [AIHW data](https://www.aihw.gov.au/) when planning.\n\n> [AU] In NSW the public-sector rate floor is set by [NSW Health](https://www.health.nsw.gov.au/).\n\n> [KEY TAKEAWAY] DB ingest works end-to-end.\n\n## Pay\n\n| Tier | Daily |\n| --- | --- |\n| Junior | A$1100 |\n| Senior | A$1600 |\n\n## FAQ\n\n### Q1?\nAnswer.\n\n### Q2?\nAnswer.\n\n### Q3?\nAnswer.\n\n### Q4?\nAnswer.\n\n## Sources\n1. AHPRA — https://www.ahpra.gov.au/\n2. AIHW — https://www.aihw.gov.au/\n3. NSW Health — https://www.health.nsw.gov.au/\n",
+    "content_markdown": "**TL;DR:** test\n\n## Background\n\n[AHPRA registration](https://www.ahpra.gov.au/) is the entry point.\n\n> [KEY FACTS] These figures are placeholders.\n\n> [INFO] Refer to [AIHW data](https://www.aihw.gov.au/) when planning.\n\n> [AU] In NSW the public-sector rate floor is informed by the [Australian Government](https://www.health.gov.au/) framework, with state-level rates aligned via local awards.\n\n> [INFO] Independent context: [The Guardian](https://www.theguardian.com/society/locum) covered locum rate trends in 2024.\n\n> [KEY TAKEAWAY] DB ingest works end-to-end.\n\n## Pay\n\n| Tier | Daily |\n| --- | --- |\n| Junior | A$1100 |\n| Senior | A$1600 |\n\n## FAQ\n\n### Q1?\nAnswer.\n\n### Q2?\nAnswer.\n\n### Q3?\nAnswer.\n\n### Q4?\nAnswer.\n\n## Sources\n1. AHPRA — https://www.ahpra.gov.au/\n2. AIHW — https://www.aihw.gov.au/\n3. NSW Health — https://www.health.gov.au/\n",
     "tldr": "Test post",
     "pillar": "locum_pay_rates",
     "content_type": "guide",
@@ -62,11 +63,12 @@ cat > /tmp/sd-ingest.json <<'JSON'
     "sources": [
       {"title": "AHPRA", "url": "https://www.ahpra.gov.au/", "publisher": "AHPRA", "snippet": "x"},
       {"title": "AIHW", "url": "https://www.aihw.gov.au/", "publisher": "AIHW", "snippet": "x"},
-      {"title": "NSW Health", "url": "https://www.health.nsw.gov.au/", "publisher": "NSW Health", "snippet": "x"}
+      {"title": "Department of Health", "url": "https://www.health.gov.au/", "publisher": "Department of Health", "snippet": "x"},
+      {"title": "The Guardian", "url": "https://www.theguardian.com/society/locum", "publisher": "The Guardian", "snippet": "x"}
     ],
     "image_url": null,
     "image_credit": null,
-    "faq_json_ld": {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Q1?","acceptedAnswer":{"@type":"Answer","text":"A1"}},{"@type":"Question","name":"Q2?","acceptedAnswer":{"@type":"Answer","text":"A2"}},{"@type":"Question","name":"Q3?","acceptedAnswer":{"@type":"Answer","text":"A3"}},{"@type":"Question","name":"Q4?","acceptedAnswer":{"@type":"Answer","text":"A4"}}]},
+    "faq_json_ld": {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Q1?","acceptedAnswer":{"@type":"Answer","text":"A1"}},{"@type":"Question","name":"Q2?","acceptedAnswer":{"@type":"Answer","text":"A2"}},{"@type":"Question","name":"Q3?","acceptedAnswer":{"@type":"Answer","text":"A3"}},{"@type":"Question","name":"Q4?","acceptedAnswer":{"@type":"Answer","text":"A4"}},{"@type":"Question","name":"Q5?","acceptedAnswer":{"@type":"Answer","text":"A5"}},{"@type":"Question","name":"Q6?","acceptedAnswer":{"@type":"Answer","text":"A6"}},{"@type":"Question","name":"Q7?","acceptedAnswer":{"@type":"Answer","text":"A7"}},{"@type":"Question","name":"Q8?","acceptedAnswer":{"@type":"Answer","text":"A8"}}]},
     "medical_webpage_schema": {"@type":"MedicalWebPage"},
     "ahpra_flags": [],
     "ahpra_passed": true,
@@ -86,9 +88,16 @@ echo "==[6] DB row exists?"
 psql "${POSTGRES_URL}" -c "SELECT slug, status, content_type, word_count FROM posts;"
 
 echo
-echo "==[7] /admin/posts now lists 5 pending (4 fs + 1 DB)? — actually DB mode means only DB"
-curl -sS http://localhost:3000/admin/posts | grep -oE 'class="display text-xl[^"]*">[^<]+' | head -5
-echo "(expecting at least 'Sydney Locum Test Post')"
+echo "==[7] /admin/posts renders the seeded article in the queue"
+# Match the rendered <a>Sydney Locum Test Post</a> regardless of surrounding class
+# names — the page-level styling has shifted twice (M8 redesign) but the title
+# text is the only stable thing we care about for this assertion.
+if curl -sS http://localhost:3000/admin/posts | grep -F "Sydney Locum Test Post" > /dev/null; then
+  echo "✓ 'Sydney Locum Test Post' present on /admin/posts"
+else
+  echo "✗ 'Sydney Locum Test Post' NOT present — check queue rendering"
+  exit 1
+fi
 
 echo
 echo "==[8] Approve it"

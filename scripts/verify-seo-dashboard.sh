@@ -19,7 +19,7 @@ cd "${REPO}/extracted"
 pkill -f "next dev" 2>/dev/null || true
 sleep 1
 : > /tmp/sd-dev.log
-POSTGRES_URL="${POSTGRES_URL}" CRON_SECRET="${CRON_SECRET}" pnpm dev > /tmp/sd-dev.log 2>&1 &
+POSTGRES_URL="${POSTGRES_URL}" CRON_SECRET="${CRON_SECRET}" ADMIN_TOKEN= pnpm dev > /tmp/sd-dev.log 2>&1 &
 echo $! > /tmp/sd-dev.pid
 until grep -qE "Ready in|Failed|EADDRINUSE" /tmp/sd-dev.log 2>/dev/null; do sleep 1; done
 echo "(ready)"

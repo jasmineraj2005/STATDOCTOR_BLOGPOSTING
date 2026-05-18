@@ -27,6 +27,7 @@ POSTGRES_URL="${POSTGRES_URL}" \
   INGEST_TOKEN="${INGEST_TOKEN}" \
   CRON_SECRET="${CRON_SECRET}" \
   WEBSITE_POSTS_DIR=/tmp/sd-publish-test \
+  ADMIN_TOKEN= \
   pnpm dev > /tmp/sd-dev.log 2>&1 &
 echo $! > /tmp/sd-dev.pid
 until grep -qE "Ready in|Failed|EADDRINUSE" /tmp/sd-dev.log 2>/dev/null; do sleep 1; done
