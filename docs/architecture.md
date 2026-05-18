@@ -282,7 +282,7 @@ STATDOCTOR_BLOGPOSTING/
 │   │       └── aggregate.ts           SEO dashboard pages
 │   │
 │   ├── e2e/                           Playwright — admin-flow, sunday-* specs, validator-gate, axe-core a11y, canary, banner-state
-│   └── playwright.config.ts
+│   └── (playwright removed 2026-05-18 — vitest + verify-*.sh cover the safety net)
 │
 └── .github/
     ├── actions/recover-and-alert/     Layer B composite action
@@ -296,7 +296,7 @@ STATDOCTOR_BLOGPOSTING/
         ├── cron-canary.yml
         ├── cron-sunday-batch-report.yml
         ├── cron-sunday-reminder.yml
-        └── ci.yml                     vitest + playwright + pytest gating
+        └── ci.yml                     vitest + pytest gating (playwright removed)
 ```
 
 ---

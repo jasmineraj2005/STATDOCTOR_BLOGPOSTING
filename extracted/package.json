@@ -8,8 +8,7 @@
     "lint": "eslint .",
     "start": "next start",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",
@@ -82,8 +81,6 @@
     ]
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.10.0",
-    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22",
     "@types/pg": "^8.20.0",

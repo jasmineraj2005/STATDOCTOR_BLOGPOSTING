@@ -11,12 +11,11 @@ describe("coverage gates", () => {
     expect(cfg).toMatch(/lib\/seo/);
     expect(cfg).toMatch(/thresholds/);
   });
-  it("CI workflow runs vitest, playwright, and pytest", () => {
+  it("CI workflow runs vitest and pytest (playwright removed 2026-05-18)", () => {
     const ciPath = path.join(REPO_ROOT, ".github/workflows/ci.yml");
     expect(existsSync(ciPath)).toBe(true);
     const ci = readFileSync(ciPath, "utf8");
     expect(ci).toMatch(/^\s*- run: pnpm test\s*$/m);
-    expect(ci).toMatch(/playwright/);
     expect(ci).toMatch(/pytest/);
   });
   it("CI pytest job binds OPENAI_API_KEY from secrets", () => {

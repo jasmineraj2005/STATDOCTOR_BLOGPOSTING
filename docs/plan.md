@@ -2,7 +2,9 @@
 
 > **Source of truth siblings:** `docs/architecture.md`, `docs/bugs.md`, `docs/launch-runbook.md`.
 > **Pacing:** *soft launch when ready* — correctness over speed.
-> **Discipline:** TDD for every fix (failing test → implementation → green). BDD-shaped Playwright specs for user-facing flows.
+> **Discipline:** TDD for every fix (failing test → implementation → green). User-facing flows verified via vitest integration + manual Vercel-preview eyeballing + the local `scripts/verify-all.sh` end-to-end harness.
+
+> **Note (2026-05-18 EOD):** Playwright was removed from the project at end of launch session. The e2e/ specs were used as a smoke harness only, but had pre-existing CI hygiene debt (hardcoded local-dev POSTGRES_URL, missing admin cookie injection) that outweighed their value. Where M7 / Tier 3 / Test-types references below mention Playwright, treat as historical — the real safety net is now vitest (400 cases) + pytest (289 cases) + `scripts/verify-all.sh`. Tier 3 25-min SLA is timed by manual stopwatch instead.
 
 ---
 
