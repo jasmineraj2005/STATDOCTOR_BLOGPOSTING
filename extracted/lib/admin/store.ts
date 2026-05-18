@@ -257,7 +257,7 @@ export async function getPostRevisions(slug: string): Promise<PostRevision[]> {
     SELECT id, slug, data, edited_at, edited_by, reason
       FROM post_revisions
       WHERE slug = ${slug}
-      ORDER BY edited_at DESC
+      ORDER BY edited_at DESC, id DESC
   `;
   return rows.map((r) => ({
     id: r.id,

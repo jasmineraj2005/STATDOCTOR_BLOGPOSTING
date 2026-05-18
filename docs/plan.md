@@ -38,17 +38,83 @@
 
 ---
 
+## 🚀 Launch state — 2026-05-18 evening
+
+PR #29 + #30 merged. Vercel auto-deployed everything. All P0/P1 foundation work is live in production.
+
+| Gate | Status |
+|---|---|
+| **G1** Prod 503 cleared | ✅ HEALTH_EXPECTED_FAILING_CRONS=seo-snapshot deployed; /api/health returns `{"ok":true,"status":"healthy"}` |
+| **G2** Pre-flight | ✅ 11/15 fully green · 3 implicitly green · 1 known-O2 tolerable (banner shows `cron_stale: seo-snapshot`, expected) |
+| **G3** Tier 2 canary | ✅ Real-LLM end-to-end pipeline walked clean on new deploy (run 26019178737) |
+| **Schema** | ✅ M9 `post_revisions` + `deleted_at` applied (29 statements via /api/admin/migrate) |
+| **ADMIN_TOKEN** | ✅ Rotated to a fresh 64-char hex (replaced the inherited `sk_live_a12…` value — see security note below) |
+
+**Next scheduled real run:** Mon 2026-05-18 14:00 UTC = **Tuesday 00:00 AEST**. First Tier 3 rehearsal article lands in `/admin/posts` ~5 min later. CEO reviews Tuesday morning.
+
+---
+
+## 🌅 Tomorrow morning checklist — Tuesday 2026-05-19 ~07:00 AEST
+
+The Monday 14:00 UTC pipeline run will have completed by midnight Melbourne time tonight. **Open `https://blog.statdoctor.app/admin/posts` and walk these checks** (~5 min):
+
+### Quick checks (just open the dashboard)
+
+1. **Article appears in queue.** One row in `pending_review`. If empty, the pipeline failed silently — check `gh run list --workflow=pipeline.yml --limit 1` for the error.
+2. **Banner state.** Should show `cron_stale: seo-snapshot` (known O2 — ignore). If it shows `publish_failed` or anything else, click through.
+3. **Validator counts in the article row.** Look for the small chip next to the title: `8 pass · 0 fail · 0 warn` is the dream. `7 pass · 1 warn` is fine (warns don't block — that's the M16 win). `1 fail` means click EDIT and look at the panel.
+
+### Click into the article — review-page checks (M8 redesign in action)
+
+4. **Title + content-type chip + pillar chip + word count** render at the top.
+5. **Jump-link chips** (`Validators ↓ Reject ↓ History ↓ Edit ↓`) are visible right below the buttons. Each one should scroll-target when clicked.
+6. **Article preview** is full-width and readable. TL;DR shows in a styled callout box (not the duplicated grey text — that was removed in M8).
+7. **Sources panel** below the body shows 3+ distinct publishers (M6 gate). At least one should be an authoritative `.gov.au` / `.org.au` domain.
+8. **Validators panel** (anchor `#validators`) lists 8 checks. Click the jump-link chip — it should scroll there smoothly.
+9. **Reject form** below validators. Don't submit; just confirm it renders.
+10. **Revisions panel** is absent (no edits yet — only appears when there's at least one revision).
+11. **Edit fold** at the bottom — click to expand; meta_title + meta_description + content_markdown fields show; click again to collapse.
+
+### Decide what to do with the article
+
+- **All 8 green + reads well + sources look right** → click **APPROVE & PUBLISH** at the top. Status flips to `scheduled`. The article publishes Wed 09:00 UTC (Wed 19:00 AEST). The redirect back to the queue should show the post moved to the "Scheduled" fold.
+- **Some red dot, looks fixable** → click **HEAL**. Workflow fires; refresh in ~90s. Validator turns green.
+- **Article topic just isn't great** → use **DISMISS** in the queue row OR open the article + use the Reject form. First rejection sends it back to `pending_review` (with `rejection_history` populated). A second rejection auto-soft-deletes (per M9-finish) — surfaces in the "Deleted, last 30 days" fold with a RESTORE button if you change your mind.
+- **You want to edit something** → expand the Edit fold, change meta/markdown, hit SAVE. Edit auto-snapshots the pre-edit state to `post_revisions` (per M9). The Revisions panel will now show 1 entry.
+
+### What to send me if anything is off
+
+- A screenshot of the queue page (URL bar, validator chips visible)
+- A screenshot of the article detail page if you opened one
+- The HTTP status from `curl -sS https://blog.statdoctor.app/api/health`
+- The pipeline run log: `gh run view --log $(gh run list --workflow=pipeline.yml --limit 1 --json databaseId --jq '.[0].databaseId')`
+
+---
+
+## ⏳ Two open decisions before tomorrow
+
+1. **Tonight: A or B?** — Option A (just wait for the 00:00 AEST auto-run, see result tomorrow). Option B (`gh workflow run pipeline.yml` now, see result in 5 min, prove ingest tokens align before bed). Currently leaning A.
+2. **ALERT_EMAIL recipient** — which inbox should receive cron-failure + publish_failed + canary-failure emails? Defaults to `anu@statdoctor.net`; user wants these to a personal address instead. Once you decide:
+   ```bash
+   vercel env add ALERT_EMAIL production
+   # paste your address
+   vercel deploy --prod
+   ```
+
+---
+
 ## 🔁 Revisit list — pick up here next session
 
-These are not blockers but tracked so future-you (or a fresh session) can resume cleanly. Each item has a definite "done" condition.
+These are tracked so future-you (or a fresh session) can resume cleanly. Each item has a definite "done" condition.
 
 ### Operator-side (anu / no code change)
 
-1. **🟡 Prod 503** — `vercel env add HEALTH_EXPECTED_FAILING_CRONS seo-snapshot production && vercel deploy --prod`. Verify with `curl -sS https://blog.statdoctor.app/api/health | jq .ok` → `true`. Saved as memory `prod-503-mitigation.md`. *Done when:* prod returns 200.
-2. **🟡 GSC SA propagation** (`bugs.md` O2 / plan M25). Retry user-add at `https://search.google.com/search-console/users?resource_id=sc-domain%3Astatdoctor.app`. *Done when:* a `seo-snapshot` cron run logs success in `cron_runs`. After that, remove `HEALTH_EXPECTED_FAILING_CRONS` env var.
-3. **🟡 Two stuck May 14–15 articles** (`bugs.md` O9). `gh workflow run heal.yml -f slug=<each>` after the M2 fix is deployed; if heal can't recover them, REJECT (now safe — M9 soft-delete preserves data). *Done when:* zero pre-2026-05-18 rows in `pending_heal` / `heal_failed`.
-4. **15-item pre-flight checklist** (`docs/launch-runbook.md` §C). Items 1–6, 8, 10, 12, 14, 15 still need a Vercel / gh / prod-DB walk. *Done when:* all 15 are `[x]`.
-5. **Tier 2 canary** — `gh workflow run cron-canary.yml`. First real-LLM test of the M2 heal in prod. *Done when:* happy-path canary green twice consecutively within 48h.
+1. **✅ Prod 503 cleared** (was 🟡) — N5 env deployed 2026-05-18. Will need to remove `HEALTH_EXPECTED_FAILING_CRONS` env var once item 2 below clears.
+2. **🟡 GSC SA propagation** (`bugs.md` O2 / plan M25). Retry user-add at `https://search.google.com/search-console/users?resource_id=sc-domain%3Astatdoctor.app`. *Done when:* a `seo-snapshot` cron run logs success in `cron_runs`. After that, remove `HEALTH_EXPECTED_FAILING_CRONS` from Vercel + redeploy.
+3. **🟡 Two stuck May 14–15 articles** (`bugs.md` O9). `gh workflow run heal.yml -f slug=<each>` now that M2 is live; if heal can't recover them, REJECT twice (M9 soft-delete preserves data). *Done when:* zero pre-2026-05-18 rows in `pending_heal` / `heal_failed`.
+4. **🟡 Pre-flight items 13, 14, 15** — `inject-failure.ts × 4` (deferred; runs would pollute prod alerts; verify-all.sh covered the same paths locally), Resend `mail.statdoctor.app` dashboard glance (1 min), `last 3 canaries green` (1/3 today, next 2 fire automatically Tue + Wed 04:00 UTC).
+5. **🟡 Cross-side token alignment confirmation** — `INGEST_TOKEN`, `CRON_SECRET`, `ALERT_INGEST_TOKEN` must match between Vercel + GH secrets. **Tonight's auto-run at Mon 14:00 UTC is the implicit verification** — if the article lands tomorrow, tokens align. If it doesn't, rotate all three to fresh matching values.
+6. **🟡 ALERT_EMAIL change** — user wants system-health alerts to a personal inbox (not `anu@statdoctor.net`). Address pending. Set via `vercel env add ALERT_EMAIL production`.
 
 ### Code-side (me / next implementation gates)
 
@@ -56,17 +122,20 @@ These are not blockers but tracked so future-you (or a fresh session) can resume
 |---|---|---|---|
 | **G6 / M10** | News auto-publish after 48h (A1) | Highest single autonomy unlock once soft launch is real. Ship behind `NEWS_AUTO_PUBLISH=off`, flip after one clean Sunday. | ~3 hrs |
 | **G7 / M11** | Source adapter fan-out (A7) — ABC AU + NewsAPI + Google News RSS + Authoritative | Reduces dependency on Guardian + LLM-suggested URLs; better publisher diversity satisfies M6 gate naturally. 4 PRs, one per adapter. | ~1 day each |
-| **G8 / M12** | Magic-link auth (A6) | Replaces static-cookie footgun. Touches every admin route's auth check — wants soft launch baseline first. | ~1.5 days |
+| **Playwright env-aware refactor** | Tracked as issue #31 (closed when playwright removed). If we re-introduce e2e tests, the spec-by-spec env-awareness refactor is the prerequisite. | Not needed until e2e returns. | ~2 hrs |
+| **G8 / M12** | Magic-link auth (A6) | Replaces static-cookie footgun (currently using a fresh 64-char hex from `openssl rand -hex 32`, which is fine but still a shared secret). | ~1.5 days |
 | **Optional polish** | M14 heal-routes-by-validator-type (S4), M13 closed-loop pipeline validation (S3) | Sharper heal-success rates; deeper retry orchestration. | M14 ≈ 2-3 days, M13 ≈ 90 min |
 
 ### Known gotchas worth noting in the new session
 
-- **Fall-open auth in dev:** `extracted/lib/admin/auth.ts:6` returns `true` if `ADMIN_TOKEN` is unset. The verify-* scripts explicitly unset it for the dev-server child. Don't accidentally remove that pattern.
-- **`.env.local` is loaded by Next.js automatically.** Set `ADMIN_TOKEN=local-dev-statdoctor-blog-2026` there. The fall-open path only kicks in when `ADMIN_TOKEN` is empty.
+- **ADMIN_TOKEN was rotated 2026-05-18 evening.** Was inherited as `sk_live_a12…` (Stripe-key-shaped — security risk for the original key wherever it really came from). Now a 64-char hex from `openssl rand -hex 32`. Both Vercel (Sensitive) and `extracted/.env.local` should hold the SAME value. If they drift, prod auth fails OR local dev auth fails — never both at once, which makes the bug confusing.
+- **Fall-open auth in dev:** `extracted/lib/admin/auth.ts:6` returns `true` if `process.env.ADMIN_TOKEN` is unset. The verify-* scripts explicitly unset it for the dev-server child. Don't accidentally remove that pattern.
 - **`data/url-whitelist.json` is a CURATED ALLOWLIST.** NSW Health and other state-level domains are NOT on it. The python validator drops them. Use `health.gov.au` (federal) in any fixtures or sample articles.
-- **pg-mem test bootstrap drift:** `store.claim.test.ts`, `store.recovery.test.ts`, `store.delete.test.ts`, `store.revisions.test.ts` each declare their own minimal posts schema. When you add a column to `posts` in `schema.sql`, add it to those four BOOTSTRAP_SQL strings too. (M9 just bit us here.)
-- **G5 soft-delete trigger is now AUTOMATIC on 2nd reject** (M9 finish, 2026-05-18). When `rejection_history.length >= 2` after appending the current reject, the route calls `softDeletePostBySlug(slug)` in addition to setting `status='rejected'`. The post disappears from the queue but survives in `posts` with `deleted_at` set; restorable from the "Deleted, last 30 days" section of `/admin/posts` for 30 days. After 30 days the row is still in the DB but the queue no longer surfaces it. Hard deletes still require `deletePostBySlug` (canary cleanup only).
-- **Memory:** `~/.claude/projects/-Users-jasminebaldevraj-Desktop-statdoctor-blog/memory/` has the two-repo rule, Vercel deploy rule, DB preference, handover mode, Sunday review window, and the new `prod-503-mitigation.md`. Read those at session start.
+- **pg-mem test bootstrap drift:** `store.claim.test.ts`, `store.recovery.test.ts`, `store.delete.test.ts`, `store.revisions.test.ts` each declare their own minimal posts schema. When you add a column to `posts` in `schema.sql`, add it to those four BOOTSTRAP_SQL strings too.
+- **`getPostRevisions` ORDER BY** is `edited_at DESC, id DESC` — the `id DESC` tiebreaker exists because pg-mem and rapid-fire production edits can collide timestamps. Don't drop it. (PR #32 added this 2026-05-18 evening.)
+- **G5 soft-delete trigger is AUTOMATIC on 2nd reject** (M9 finish). When `rejection_history.length >= 2` after appending the current reject, the route calls `softDeletePostBySlug(slug)` in addition to setting `status='rejected'`. The post disappears from the queue but survives in `posts` with `deleted_at` set; restorable from the "Deleted, last 30 days" section for 30 days. After 30 days the row is still in the DB but the queue no longer surfaces it. Hard deletes still require `deletePostBySlug` (canary cleanup only).
+- **Playwright was removed 2026-05-18.** Pre-existing spec hygiene debt (hardcoded local-dev POSTGRES_URL, missing admin cookie injection) outweighed the test value. Vitest (400 cases) + pytest (289 cases) + `scripts/verify-all.sh` cover the safety net.
+- **Memory:** `~/.claude/projects/-Users-jasminebaldevraj-Desktop-statdoctor-blog/memory/` has the two-repo rule, Vercel deploy rule, DB preference, handover mode, Sunday review window, and `prod-503-mitigation.md`. Read those at session start.
 
 ---
 

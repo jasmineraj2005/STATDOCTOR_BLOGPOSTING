@@ -50,3 +50,5 @@ yarn-error.log*
 
 # Misc local scratch
 .aider*
+.vercel
+.env*.local
