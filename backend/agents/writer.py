@@ -62,6 +62,7 @@ _VALIDATORS_JSON_PATH: str = str(
 
 # Module-level cache — populated lazily so tests can monkeypatch the path.
 _WORD_FLOORS: dict | None = None
+_FAQ_FLOORS: dict | None = None
 _AHPRA_BANNED: list[dict] | None = None
 _EDITORIALLY_BANNED: list[dict] | None = None
 
@@ -85,6 +86,19 @@ def _get_word_floors() -> dict:
         return _WORD_FLOORS
     _WORD_FLOORS = _load_validators()["word_floors"]
     return _WORD_FLOORS
+
+
+def _get_faq_floors() -> dict:
+    """Return the faq_floors mapping (news/guide/company → required FAQ count).
+
+    Mirrors _get_word_floors. Validator (validators.ts) requires news=6,
+    guide=8, company=4 — single source of truth in validators.json.
+    """
+    global _FAQ_FLOORS
+    if _FAQ_FLOORS is not None:
+        return _FAQ_FLOORS
+    _FAQ_FLOORS = _load_validators()["faq_floors"]
+    return _FAQ_FLOORS
 
 
 def _get_ahpra_banned() -> list[dict]:
@@ -168,6 +182,7 @@ def _build_outline_prompt(
     suggested_h2s: list[str],
     suggested_faqs: list[str],
     floor: int,
+    faq_floor: int,
     today: str,
 ) -> str:
     """Return the outline-pass prompt.
@@ -199,7 +214,7 @@ The section targets must SUM TO AT LEAST {floor} words total.
 Rules:
 - Use the suggested H2 questions as a starting point; improve them if needed.
 - Include a "What does this mean for locum doctors in [AU state]?" section.
-- Include a "Frequently Asked Questions" section (target ≥ 350 words for ≥ 6 Q&As).
+- Include a "Frequently Asked Questions" section (target ≥ {faq_floor * 60} words for ≥ {faq_floor} Q&As — non-negotiable floor for this content type).
 - Include a "Sources" section at the end (target: 80 words).
 - Every H2 must be a question matching how doctors search Google.
 - Output ONLY the H2 lines with their targets — no prose, no preamble.
@@ -222,6 +237,7 @@ def _build_draft_prompt(
     pillar_label: str,
     today: str,
     floor: int,
+    faq_floor: int,
     max_words: int,
     facts_text: str,
     stats_text: str,
@@ -251,7 +267,7 @@ requirement, not a suggestion. Articles below {floor} words are rejected by the 
 
 **Section-level minimums (non-negotiable):**
 - Each body H2 section: ≥ 250 words and ≥ 3 paragraphs
-- FAQ section: ≥ 6 Q&A pairs, each answer ≥ 60 words
+- FAQ section: ≥ {faq_floor} Q&A pairs (non-negotiable for {pillar_label} content), each answer ≥ 60 words
 - "What does this mean for locum doctors in [region]?" section: ≥ 300 words
 
 Do not stop early. A short post is a failed post. If you find yourself at 1200 words, you are not
@@ -299,7 +315,13 @@ Line 7+:  Body
 BODY RULES:
 1. Use ## for H2 headings — every H2 must be a question matching how doctors search Google
 2. First sentence of each section directly answers the H2 question
-3. Support with detail, then cite a stat using inline markdown: [figure](source url)
+3. Support with detail, then cite a stat using inline markdown: [figure](source url).
+   STAT CITATION PROXIMITY (mandatory): every numeric statistic MUST be followed within 200 characters by
+   a markdown link to its source — i.e. the link sits in the same paragraph as the stat, never further away.
+   Example: "20,000 GPs work in Australia ([AIHW 2024](https://aihw.gov.au/...))."
+   The AHPRA scanner flags any stat without a source link within ±200 characters as `unsupported_stat` and
+   the article gets rejected. A bare reference in a Sources list at the bottom is NOT enough — the link
+   must sit next to the stat.
 4. Include a "## What does this mean for locum doctors in [most relevant AU state/region]?" section
 5. FAQ section heading: ## Frequently Asked Questions
    Format each FAQ as: **Q: [question]** then newline then A: [answer]
@@ -393,6 +415,8 @@ def write_post(research: ResearchBrief) -> BlogPost:
     content_type = _derive_content_type(topic.pillar)
     word_floors = _get_word_floors()
     floor = word_floors.get(content_type.value, 1500)
+    faq_floors = _get_faq_floors()
+    faq_floor = faq_floors.get(content_type.value, 6)
     # Max is floor * 1.67 (approx), capped at 2500 for readability
     max_words = min(2500, max(floor + 500, int(floor * 1.5)))
 
@@ -438,6 +462,7 @@ INLINE CHART — embed exactly once, after the second H2 section. Use this ready
         suggested_h2s=topic.suggested_h2s,
         suggested_faqs=topic.suggested_faqs,
         floor=floor,
+        faq_floor=faq_floor,
         today=today,
     )
 
@@ -456,6 +481,7 @@ INLINE CHART — embed exactly once, after the second H2 section. Use this ready
         pillar_label=pillar_label,
         today=today,
         floor=floor,
+        faq_floor=faq_floor,
         max_words=max_words,
         facts_text=facts_text,
         stats_text=stats_text,
