@@ -516,6 +516,46 @@ class TestWriterPromptFAQFloor:
         )
 
 
+class TestWritePostPreviousFailure:
+    """Tier 3 / Phase 2 (M13) — write_post accepts previous_failure kwarg
+    that surfaces to the LLM as a PRIOR FAILURE FEEDBACK block so the retry
+    attempt can target the specific validator that complained."""
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_previous_failure_injected_into_draft_prompt(self, mock_create):
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(_minimal_markdown(word_target=1700)),
+        ]
+        write_post(
+            _make_research(),
+            previous_failure="schema: FAQPage has 5 questions, floor for news is 6",
+        )
+        draft_text = " ".join(
+            m["content"] for m in mock_create.call_args_list[-1][1]["messages"]
+        )
+        assert "PRIOR FAILURE" in draft_text, (
+            "Expected draft prompt to carry a PRIOR FAILURE FEEDBACK block "
+            "when write_post is called with previous_failure=..."
+        )
+        assert "FAQPage has 5 questions" in draft_text
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_no_previous_failure_means_no_feedback_block(self, mock_create):
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(_minimal_markdown(word_target=1700)),
+        ]
+        write_post(_make_research())  # no previous_failure
+        draft_text = " ".join(
+            m["content"] for m in mock_create.call_args_list[-1][1]["messages"]
+        )
+        assert "PRIOR FAILURE" not in draft_text, (
+            "Draft prompt should not carry a PRIOR FAILURE block on a fresh "
+            "(first-attempt) write — only on retries."
+        )
+
+
 class TestWriterPromptStatCitationProximity:
     """Tier 3 / Phase 1 — every statistic must carry a source link nearby.
 
