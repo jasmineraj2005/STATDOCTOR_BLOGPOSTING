@@ -406,6 +406,143 @@ class TestWriterPromptFloor:
         )
 
 
+# ── Phase 1 (Tier 3): per-content_type FAQ floor in writer prompts
+#
+# Pre-fix the outline prompt (line ~202) and draft prompt (line ~254) hardcoded
+# "≥ 6 Q&A pairs" for every content_type. The validator wants 6 for news, 8
+# for guide, 4 for company (validators.json:faq_floors). So guide articles
+# always failed schema; news sometimes failed when the LLM drifted to 5.
+
+
+class TestWriterPromptFAQFloor:
+    """Tier 3 / Phase 1 — both prompts must carry the content_type's FAQ floor."""
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_outline_prompt_news_has_six_faqs(self, mock_create):
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(_minimal_markdown(word_target=1100)),
+        ]
+        write_post(_make_research(topic=_make_topic(pillar=ContentPillar.NEWS)))
+
+        outline_text = " ".join(
+            m["content"] for m in mock_create.call_args_list[0][1]["messages"]
+        )
+        assert "6 Q&A" in outline_text or "6 FAQ" in outline_text, (
+            f"Expected outline prompt to require 6 FAQs for news; got snippet: {outline_text[:400]}"
+        )
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_draft_prompt_news_has_six_faqs(self, mock_create):
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(_minimal_markdown(word_target=1100)),
+        ]
+        write_post(_make_research(topic=_make_topic(pillar=ContentPillar.NEWS)))
+
+        draft_text = " ".join(
+            m["content"] for m in mock_create.call_args_list[-1][1]["messages"]
+        )
+        assert "6 Q&A" in draft_text, (
+            "Expected draft prompt to require 6 Q&A pairs for news content_type"
+        )
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_draft_prompt_guide_has_eight_faqs(self, mock_create):
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(_minimal_markdown(word_target=1600)),
+        ]
+        write_post(_make_research(topic=_make_topic(pillar=ContentPillar.HOW_TO)))
+
+        draft_text = " ".join(
+            m["content"] for m in mock_create.call_args_list[-1][1]["messages"]
+        )
+        assert "8 Q&A" in draft_text, (
+            "Expected draft prompt to require 8 Q&A pairs for guide content_type"
+        )
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_draft_prompt_company_has_four_faqs(self, mock_create):
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(_minimal_markdown(word_target=1100)),
+        ]
+        write_post(_make_research(topic=_make_topic(pillar=ContentPillar.COMPANY)))
+
+        draft_text = " ".join(
+            m["content"] for m in mock_create.call_args_list[-1][1]["messages"]
+        )
+        assert "4 Q&A" in draft_text, (
+            "Expected draft prompt to require 4 Q&A pairs for company content_type"
+        )
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_writer_loads_faq_floors_from_validators_json_not_hardcoded(
+        self, mock_create, monkeypatch, tmp_path
+    ):
+        """Sentinel test: stubbing validators.json with novel faq_floors proves
+        the writer reads them dynamically — a hardcoded number would never
+        match the sentinel."""
+        sentinel = {"news": 99, "guide": 77, "company": 55}
+        fake_validators = {
+            "word_floors": {"news": 1000, "guide": 1500, "company": 1000},
+            "faq_floors": sentinel,
+            "ahpra_banned": [],
+            "editorially_banned": [],
+        }
+        fake_path = tmp_path / "validators.json"
+        fake_path.write_text(json.dumps(fake_validators))
+
+        import agents.writer as writer_mod
+        monkeypatch.setattr(writer_mod, "_VALIDATORS_JSON_PATH", str(fake_path))
+        monkeypatch.setattr(writer_mod, "_WORD_FLOORS", None)
+        monkeypatch.setattr(writer_mod, "_FAQ_FLOORS", None)
+        monkeypatch.setattr(writer_mod, "_AHPRA_BANNED", None)
+        monkeypatch.setattr(writer_mod, "_EDITORIALLY_BANNED", None)
+
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(_minimal_markdown(word_target=1100)),
+        ]
+        write_post(_make_research(topic=_make_topic(pillar=ContentPillar.NEWS)))
+
+        draft_text = " ".join(
+            m["content"] for m in mock_create.call_args_list[-1][1]["messages"]
+        )
+        assert "99" in draft_text, (
+            "Expected sentinel FAQ floor 99 to appear in draft prompt — "
+            "this fails if floors are hardcoded in Python"
+        )
+
+
+class TestWriterPromptStatCitationProximity:
+    """Tier 3 / Phase 1 — every statistic must carry a source link nearby.
+
+    AHPRA's `unsupported_stat` auto-resolver (M5, ahpra.py) only forgives a
+    stat when a source URL sits within ±200 chars of the stat in the body.
+    The writer prompt must communicate this proximity rule explicitly so the
+    LLM doesn't dump all citations into a Sources section at the bottom.
+    """
+
+    @patch("agents.writer.client.chat.completions.create")
+    def test_draft_prompt_specifies_proximity_window(self, mock_create):
+        mock_create.side_effect = [
+            _make_mock_response(_outline_content()),
+            _make_mock_response(_minimal_markdown(word_target=1100)),
+        ]
+        write_post(_make_research(topic=_make_topic(pillar=ContentPillar.NEWS)))
+
+        draft_text = " ".join(
+            m["content"] for m in mock_create.call_args_list[-1][1]["messages"]
+        ).lower()
+        assert "within 200 characters" in draft_text or "same paragraph" in draft_text, (
+            "Expected draft prompt to require source-link proximity (≤200 chars or "
+            "same paragraph) for every statistic. Without this, AHPRA's auto-resolver "
+            "can't forgive the stat and `unsupported_stat` flags will block ingest."
+        )
+
+
 # ── M15: AHPRA coach-and-scan — prohibited-content block is in the draft prompt
 #
 # Pre-M15 the writer learned the regex-form banned phrases (from validators.json
