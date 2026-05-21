@@ -246,9 +246,33 @@ def _build_draft_prompt(
     chart_instruction: str,
     inline_img_instruction: str,
     outline: str,
+    previous_failure: str | None = None,
 ) -> str:
-    """Return the full draft-pass prompt, embedding the outline as a hard constraint."""
+    """Return the full draft-pass prompt, embedding the outline as a hard constraint.
+
+    M13 closed-loop: when previous_failure is supplied (this call is a retry),
+    inject a PRIOR FAILURE FEEDBACK block at the top so the model targets the
+    specific validator that rejected the previous attempt.
+    """
+    prior_failure_block = (
+        f"""
+═══════════════════════════════════
+PRIOR FAILURE FEEDBACK (this is a retry — fix the specific issue)
+═══════════════════════════════════
+A previous attempt for this article was rejected by the validator:
+
+  {previous_failure}
+
+You MUST address this specific failure. Do not repeat the same mistake. Keep
+the rest of the article intact — only fix what the validator flagged.
+
+═══════════════════════════════════
+"""
+        if previous_failure
+        else ""
+    )
     return f"""You are an expert medical content writer for StatDoctor ({SITE_URL}), Australia's locum doctor marketplace.
+{prior_failure_block}
 
 ═══════════════════════════════════
 AHPRA COMPLIANCE (coach-and-scan — non-negotiable)
@@ -397,7 +421,7 @@ Write the complete post now. Output only the markdown — no preamble:"""
 # ── public entry point ────────────────────────────────────────────────────────
 
 
-def write_post(research: ResearchBrief) -> BlogPost:
+def write_post(research: ResearchBrief, *, previous_failure: str | None = None) -> BlogPost:
     """Write the full blog post from research brief.
 
     Two-pass approach:
@@ -490,6 +514,7 @@ INLINE CHART — embed exactly once, after the second H2 section. Use this ready
         chart_instruction=chart_instruction,
         inline_img_instruction=inline_img_instruction,
         outline=outline,
+        previous_failure=previous_failure,
     )
 
     response = client.chat.completions.create(
